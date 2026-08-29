@@ -1,19 +1,10 @@
-import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import * as path from 'node:path';
 import type { INestApplication } from '@nestjs/common';
-import { Test, type TestingModule } from '@nestjs/testing';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redis';
-import Redis from 'ioredis';
 import request from 'supertest';
-import { AppModule } from '../../src/app.module';
-import { configureApp } from '../../src/bootstrap';
-import type { AppConfigService } from '../../src/config/app-config.service';
-import { PrismaService } from '../../src/database/prisma.service';
-import { RedisService } from '../../src/redis/redis.service';
+import type { PrismaService } from '../../src/database/prisma.service';
 import { NotificationConsumer } from '../../src/notifications/notification.consumer';
 import { MAX_ATTEMPTS, OutboxProcessor } from '../../src/outbox/outbox.processor';
+import { type IntegrationApp, startIntegrationApp } from './support/integration-app';
 
 /**
  * Transactional outbox + in-app notification proofs (AC-7 and
@@ -23,9 +14,7 @@ import { MAX_ATTEMPTS, OutboxProcessor } from '../../src/outbox/outbox.processor
  * alter what already committed.
  */
 describe('Outbox worker and notifications (integration)', () => {
-  let container: StartedPostgreSqlContainer;
-  let redisContainer: StartedRedisContainer;
-  let redis: Redis;
+  let harness: IntegrationApp;
   let app: INestApplication;
   let prisma: PrismaService;
   let processor: OutboxProcessor;
@@ -37,63 +26,17 @@ describe('Outbox worker and notifications (integration)', () => {
   }
 
   beforeAll(async () => {
-    container = await new PostgreSqlContainer('postgres:16-alpine').start();
-    // A dedicated Redis so rate-limit counters start clean and can be flushed
-    // between tests — a shared dev instance would leak counters across runs.
-    redisContainer = await new RedisContainer('redis:7-alpine').start();
-    redis = new Redis(redisContainer.getConnectionUrl());
-
-    process.env.DATABASE_URL = container.getConnectionUri();
-    process.env.REDIS_URL = redisContainer.getConnectionUrl();
-    process.env.JWT_ACCESS_SECRET = 'integration-test-secret-at-least-32-characters-long';
-    process.env.NODE_ENV = 'test';
-
-    const repoRoot = path.resolve(__dirname, '../../../..');
-    const schemaPath = path.join(repoRoot, 'database', 'prisma', 'schema.prisma');
-    const prismaCliEntry = path.join(repoRoot, 'node_modules', 'prisma', 'build', 'index.js');
-
-    execFileSync(process.execPath, [prismaCliEntry, 'migrate', 'deploy', '--schema', schemaPath], {
-      env: process.env,
-      stdio: 'pipe',
-    });
-
-    // AppConfigModule validates and freezes env at import time, which happens
-    // before this hook runs — so the container's Redis URL has to be injected
-    // by overriding the provider rather than by setting REDIS_URL here.
-    const moduleRef: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-      .overrideProvider(RedisService)
-      .useValue(
-        new RedisService({
-          redisUrl: redisContainer.getConnectionUrl(),
-        } as unknown as AppConfigService),
-      )
-      .compile();
-    app = moduleRef.createNestApplication();
-    configureApp(app);
-    await app.init();
-
-    prisma = app.get(PrismaService);
+    harness = await startIntegrationApp();
+    app = harness.app;
+    prisma = harness.prisma;
     processor = app.get(OutboxProcessor);
-  }, 120_000);
+  }, 180_000);
 
   afterAll(async () => {
-    await app.close();
-    redis.disconnect();
-    await redisContainer.stop();
-    await container.stop();
+    await harness?.stop();
   });
 
-  beforeEach(async () => {
-    await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE notifications, audit_events, ledger_entries, outbox_events, transfers, ' +
-        'money_requests, idempotency_records, auth_sessions, wallets, users RESTART IDENTITY CASCADE',
-    );
-    // Registrations here all originate from one loopback address; without this
-    // the per-IP signup budget would bleed across tests.
-    await redis.flushall();
-  });
+  beforeEach(() => harness.reset());
 
   function server(): ReturnType<INestApplication['getHttpServer']> {
     return app.getHttpServer();

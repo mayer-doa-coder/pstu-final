@@ -1,17 +1,8 @@
-import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import * as path from 'node:path';
 import type { INestApplication } from '@nestjs/common';
-import { Test, type TestingModule } from '@nestjs/testing';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redis';
-import Redis from 'ioredis';
 import request from 'supertest';
-import { AppModule } from '../../src/app.module';
-import { configureApp } from '../../src/bootstrap';
-import type { AppConfigService } from '../../src/config/app-config.service';
-import { PrismaService } from '../../src/database/prisma.service';
-import { RedisService } from '../../src/redis/redis.service';
+import type { PrismaService } from '../../src/database/prisma.service';
+import { type IntegrationApp, startIntegrationApp } from './support/integration-app';
 
 const PASSWORD = 'correct horse battery staple';
 
@@ -21,9 +12,7 @@ const PASSWORD = 'correct horse battery staple';
  * developer investigate an action by actor, resource, or correlation id.
  */
 describe('Security hardening and audit (integration)', () => {
-  let container: StartedPostgreSqlContainer;
-  let redisContainer: StartedRedisContainer;
-  let redis: Redis;
+  let harness: IntegrationApp;
   let app: INestApplication;
   let prisma: PrismaService;
 
@@ -35,56 +24,16 @@ describe('Security hardening and audit (integration)', () => {
   }
 
   beforeAll(async () => {
-    container = await new PostgreSqlContainer('postgres:16-alpine').start();
-    redisContainer = await new RedisContainer('redis:7-alpine').start();
-    redis = new Redis(redisContainer.getConnectionUrl());
-
-    process.env.DATABASE_URL = container.getConnectionUri();
-    process.env.JWT_ACCESS_SECRET = 'integration-test-secret-at-least-32-characters-long';
-    process.env.NODE_ENV = 'test';
-
-    const repoRoot = path.resolve(__dirname, '../../../..');
-    const schemaPath = path.join(repoRoot, 'database', 'prisma', 'schema.prisma');
-    const prismaCliEntry = path.join(repoRoot, 'node_modules', 'prisma', 'build', 'index.js');
-
-    execFileSync(process.execPath, [prismaCliEntry, 'migrate', 'deploy', '--schema', schemaPath], {
-      env: process.env,
-      stdio: 'pipe',
-    });
-
-    // Env is frozen when AppConfigModule is imported, so the container's Redis
-    // reaches the app by provider override rather than by REDIS_URL.
-    const moduleRef: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-      .overrideProvider(RedisService)
-      .useValue(
-        new RedisService({
-          redisUrl: redisContainer.getConnectionUrl(),
-        } as unknown as AppConfigService),
-      )
-      .compile();
-    app = moduleRef.createNestApplication();
-    configureApp(app);
-    await app.init();
-
-    prisma = app.get(PrismaService);
-  }, 120_000);
+    harness = await startIntegrationApp();
+    app = harness.app;
+    prisma = harness.prisma;
+  }, 180_000);
 
   afterAll(async () => {
-    await app.close();
-    redis.disconnect();
-    await redisContainer.stop();
-    await container.stop();
+    await harness?.stop();
   });
 
-  beforeEach(async () => {
-    await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE notifications, audit_events, ledger_entries, outbox_events, transfers, ' +
-        'money_requests, idempotency_records, auth_sessions, wallets, users RESTART IDENTITY CASCADE',
-    );
-    await redis.flushall();
-  });
+  beforeEach(() => harness.reset());
 
   function server(): ReturnType<INestApplication['getHttpServer']> {
     return app.getHttpServer();
