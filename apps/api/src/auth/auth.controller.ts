@@ -1,5 +1,15 @@
 import { randomBytes } from 'node:crypto';
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AppConfigService } from '../config/app-config.service';
 import { buildCookieOptions } from '../common/cookies/cookie-options.util';

@@ -42,7 +42,9 @@ describe('Auth + User + Wallet (integration)', () => {
       stdio: 'pipe',
     });
 
-    const moduleRef: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
     app = moduleRef.createNestApplication();
     configureApp(app);
     await app.init();
@@ -110,11 +112,16 @@ describe('Auth + User + Wallet (integration)', () => {
         balanceMinor: 10_000_000,
       });
       expect(res.headers['set-cookie']).toEqual(
-        expect.arrayContaining([expect.stringContaining('access_token='), expect.stringContaining('refresh_token=')]),
+        expect.arrayContaining([
+          expect.stringContaining('access_token='),
+          expect.stringContaining('refresh_token='),
+        ]),
       );
 
       const storedUser = await prisma.user.findUniqueOrThrow({ where: { email: testUser.email } });
-      const storedWallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: storedUser.id } });
+      const storedWallet = await prisma.wallet.findUniqueOrThrow({
+        where: { userId: storedUser.id },
+      });
       expect(storedWallet.balanceMinor).toBe(10_000_000n);
     });
 
@@ -318,7 +325,11 @@ describe('Auth + User + Wallet (integration)', () => {
         .set('Cookie', agentCookies.join('; '))
         .expect(200);
 
-      expect(walletRes.body.data).toMatchObject({ currency: 'BDT', status: 'ACTIVE', balanceMinor: 10_000_000 });
+      expect(walletRes.body.data).toMatchObject({
+        currency: 'BDT',
+        status: 'ACTIVE',
+        balanceMinor: 10_000_000,
+      });
     });
 
     it('rejects an unauthenticated wallet lookup', async () => {

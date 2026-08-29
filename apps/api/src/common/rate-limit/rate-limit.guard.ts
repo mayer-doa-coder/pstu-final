@@ -1,4 +1,10 @@
-import { type CanActivate, type ExecutionContext, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import {
+  type CanActivate,
+  type ExecutionContext,
+  HttpStatus,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { RedisService } from '../../redis/redis.service';
@@ -27,7 +33,10 @@ export class RateLimitGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const options = this.reflector.get<RateLimitOptions | undefined>(RATE_LIMIT_KEY, context.getHandler());
+    const options = this.reflector.get<RateLimitOptions | undefined>(
+      RATE_LIMIT_KEY,
+      context.getHandler(),
+    );
     if (!options) {
       return true;
     }
@@ -39,14 +48,20 @@ export class RateLimitGuard implements CanActivate {
     try {
       const count = await this.redis.incrementWithExpiry(key, options.windowSeconds);
       if (count > options.limit) {
-        throw new AppException(HttpStatus.TOO_MANY_REQUESTS, ErrorCode.RATE_LIMITED, 'Too many requests. Please slow down.');
+        throw new AppException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          ErrorCode.RATE_LIMITED,
+          'Too many requests. Please slow down.',
+        );
       }
       return true;
     } catch (error) {
       if (error instanceof AppException) {
         throw error;
       }
-      this.logger.warn(`Rate limit check unavailable, allowing request through: ${(error as Error).message}`);
+      this.logger.warn(
+        `Rate limit check unavailable, allowing request through: ${(error as Error).message}`,
+      );
       return true;
     }
   }

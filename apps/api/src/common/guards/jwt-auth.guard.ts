@@ -27,15 +27,25 @@ export class JwtAuthGuard implements CanActivate {
     const token = request.cookies?.[ACCESS_TOKEN_COOKIE] as string | undefined;
 
     if (!token) {
-      throw new AppException(HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw new AppException(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.UNAUTHENTICATED,
+        'Authentication required.',
+      );
     }
 
     try {
-      const payload = this.jwt.verify<AccessTokenPayload>(token, { secret: this.config.jwtAccessSecret });
+      const payload = this.jwt.verify<AccessTokenPayload>(token, {
+        secret: this.config.jwtAccessSecret,
+      });
       request.user = { id: payload.sub };
       return true;
     } catch {
-      throw new AppException(HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHENTICATED, 'Invalid or expired session.');
+      throw new AppException(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.UNAUTHENTICATED,
+        'Invalid or expired session.',
+      );
     }
   }
 }

@@ -16,7 +16,11 @@ export class WalletsService {
       // Every active user has exactly one wallet, created atomically at
       // registration (AuthService.register). Reaching here means that
       // invariant was violated, not a normal "not found" case.
-      throw new AppException(HttpStatus.INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_ERROR, 'Wallet not found for user.');
+      throw new AppException(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        ErrorCode.INTERNAL_ERROR,
+        'Wallet not found for user.',
+      );
     }
 
     return toWalletDto(wallet);

@@ -25,7 +25,10 @@ export class UsersService {
     return toUserProfileDto(user);
   }
 
-  async search(query: SearchUsersQuery, currentUserId: string): Promise<CursorPage<UserSearchResultDto>> {
+  async search(
+    query: SearchUsersQuery,
+    currentUserId: string,
+  ): Promise<CursorPage<UserSearchResultDto>> {
     const cursorId = query.cursor ? this.decodeAndValidateCursor(query.cursor) : undefined;
 
     // Fetch one extra row to know whether a next page exists, without a

@@ -29,7 +29,11 @@ export class ResponseEnvelopeInterceptor<T> implements NestInterceptor<T, Succes
     return next.handle().pipe(
       map((result) => {
         if (result instanceof CursorPage) {
-          return { data: result.data as T, meta: { nextCursor: result.nextCursor }, requestId: request.requestId };
+          return {
+            data: result.data as T,
+            meta: { nextCursor: result.nextCursor },
+            requestId: request.requestId,
+          };
         }
         return { data: result, meta: {}, requestId: request.requestId };
       }),

@@ -36,6 +36,9 @@ export class AuthSessionRepository {
   }
 
   async revokeAllActiveForUser(userId: string, db: Db = this.prisma): Promise<void> {
-    await db.authSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    await db.authSession.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 }

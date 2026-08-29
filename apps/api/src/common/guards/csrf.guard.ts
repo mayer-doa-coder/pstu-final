@@ -20,7 +20,11 @@ export class CsrfGuard implements CanActivate {
     const headerToken = request.header(CSRF_TOKEN_HEADER);
 
     if (!cookieToken || !headerToken || cookieToken !== headerToken) {
-      throw new AppException(HttpStatus.FORBIDDEN, ErrorCode.FORBIDDEN, 'Missing or invalid CSRF token.');
+      throw new AppException(
+        HttpStatus.FORBIDDEN,
+        ErrorCode.FORBIDDEN,
+        'Missing or invalid CSRF token.',
+      );
     }
 
     return true;

@@ -48,6 +48,8 @@ describe('validateEnv', () => {
   });
 
   it('rejects a JWT_ACCESS_SECRET shorter than 32 characters', () => {
-    expect(() => validateEnv({ ...validEnv, JWT_ACCESS_SECRET: 'too-short' })).toThrow(/JWT_ACCESS_SECRET/);
+    expect(() => validateEnv({ ...validEnv, JWT_ACCESS_SECRET: 'too-short' })).toThrow(
+      /JWT_ACCESS_SECRET/,
+    );
   });
 });

@@ -1,9 +1,9 @@
 // Money Movement — Prisma schema.
 //
-// Milestone 1 (Auth + User + Wallet foundation). Only the models needed for
-// authentication, user identity, and wallets are defined here — transfers,
-// ledger, money requests, idempotency, outbox, notifications, and audit
-// arrive in later milestones per IMPLEMENTATION_GUIDE.md §4.
+// Milestone 1 (Auth + User + Wallet) and Milestone 3 (Direct transfer core:
+// transfers, ledger_entries, idempotency_records, outbox_events) are defined
+// here. Money requests, notifications, and audit arrive in later milestones
+// per IMPLEMENTATION_GUIDE.md §4.
 
 generator client {
   provider        = "prisma-client-js"
@@ -28,6 +28,28 @@ enum WalletStatus {
   CLOSED
 }
 
+enum TransferStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum TransferSourceType {
+  DIRECT
+  MONEY_REQUEST
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum IdempotencyState {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model User {
   // Native UUID column per IMPLEMENTATION_GUIDE.md §2.2. Generated as
   // UUIDv4 (Prisma's built-in default) rather than the guide's UUIDv7
@@ -45,8 +67,11 @@ model User {
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
-  wallet       Wallet?
-  authSessions AuthSession[]
+  wallet             Wallet?
+  authSessions       AuthSession[]
+  transfersSent      Transfer[]          @relation("TransferSender")
+  transfersReceived  Transfer[]          @relation("TransferReceiver")
+  idempotencyRecords IdempotencyRecord[]
 
   // Serves GET /users/search (Milestone 2): the query always filters
   // status = 'ACTIVE' and sorts by (displayName, id) for cursor pagination,
@@ -67,9 +92,124 @@ model Wallet {
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
+  transfersOut  Transfer[]    @relation("TransferSenderWallet")
+  transfersIn   Transfer[]    @relation("TransferReceiverWallet")
+  ledgerEntries LedgerEntry[]
 
   @@map("wallets")
+}
+
+// A single money movement between two wallets. The `transfers` module is the
+// only code path allowed to create these and mutate wallet balances
+// (IMPLEMENTATION_GUIDE.md §1.3). `status` is a strict state machine:
+// PENDING is written first, then flipped to exactly one terminal value
+// (SUCCEEDED / FAILED) inside the same DB transaction — terminal states
+// never transition again.
+model Transfer {
+  id               String             @id @default(uuid()) @db.Uuid
+  senderUserId     String             @map("sender_user_id") @db.Uuid
+  receiverUserId   String             @map("receiver_user_id") @db.Uuid
+  senderWalletId   String             @map("sender_wallet_id") @db.Uuid
+  receiverWalletId String             @map("receiver_wallet_id") @db.Uuid
+  // Integer minor units (poisha) only — never floating point. CHECK (> 0)
+  // is enforced at the database level (see migration).
+  amountMinor      BigInt             @map("amount_minor")
+  currency         String             @default("BDT") @db.Char(3)
+  status           TransferStatus     @default(PENDING)
+  note             String?            @db.VarChar(280)
+  // DIRECT for this milestone; MONEY_REQUEST (with sourceRequestId set) is
+  // added when the money-requests module lands.
+  sourceType       TransferSourceType @default(DIRECT) @map("source_type")
+  sourceRequestId  String?            @map("source_request_id") @db.Uuid
+  failureCode      String?            @map("failure_code") @db.VarChar(64)
+  createdAt        DateTime           @default(now()) @map("created_at")
+  completedAt      DateTime?          @map("completed_at")
+
+  sender         User          @relation("TransferSender", fields: [senderUserId], references: [id])
+  receiver       User          @relation("TransferReceiver", fields: [receiverUserId], references: [id])
+  senderWallet   Wallet        @relation("TransferSenderWallet", fields: [senderWalletId], references: [id])
+  receiverWallet Wallet        @relation("TransferReceiverWallet", fields: [receiverWalletId], references: [id])
+  ledgerEntries  LedgerEntry[]
+
+  @@index([senderUserId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_transfers_sender_created")
+  @@index([receiverUserId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_transfers_receiver_created")
+  @@index([sourceRequestId], map: "idx_transfers_request")
+  @@map("transfers")
+}
+
+// Append-only double-entry ledger. Every successful transfer writes exactly
+// one DEBIT and one CREDIT row whose `signedAmountMinor` values sum to zero
+// (IMPLEMENTATION_GUIDE.md §2.5 / §9.1). Rows are NEVER updated or deleted —
+// a correction is a new compensating transfer, not an edit.
+model LedgerEntry {
+  id                String          @id @default(uuid()) @db.Uuid
+  transferId        String          @map("transfer_id") @db.Uuid
+  walletId          String          @map("wallet_id") @db.Uuid
+  direction         LedgerDirection
+  amountMinor       BigInt          @map("amount_minor")
+  // = -amountMinor for DEBIT, +amountMinor for CREDIT. A DB CHECK keeps the
+  // sign consistent with `direction` (see migration).
+  signedAmountMinor BigInt          @map("signed_amount_minor")
+  currency          String          @db.Char(3)
+  // Wallet balance immediately after this entry was applied — a running
+  // balance snapshot for audit/reconciliation, captured under the row lock.
+  balanceAfterMinor BigInt          @map("balance_after_minor")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  transfer Transfer @relation(fields: [transferId], references: [id])
+  wallet   Wallet   @relation(fields: [walletId], references: [id])
+
+  @@index([walletId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_ledger_wallet_created")
+  @@index([transferId], map: "idx_ledger_transfer")
+  @@map("ledger_entries")
+}
+
+// Durable retry-safety record (IMPLEMENTATION_GUIDE.md §1.6). One row per
+// (actorUserId, routeKey, idempotencyKey); a completed row stores the exact
+// canonical response so a retried request replays it byte-for-byte instead
+// of moving money twice. Never Redis-only — financial correctness needs this
+// in PostgreSQL.
+model IdempotencyRecord {
+  id             String           @id @default(uuid()) @db.Uuid
+  actorUserId    String           @map("actor_user_id") @db.Uuid
+  routeKey       String           @map("route_key") @db.VarChar(80)
+  idempotencyKey String           @map("idempotency_key") @db.VarChar(128)
+  // SHA-256 of the canonical request payload. Same key + different hash =>
+  // 409 IDEMPOTENCY_KEY_REUSED.
+  requestHash    String           @map("request_hash") @db.Char(64)
+  state          IdempotencyState
+  responseStatus Int?             @map("response_status")
+  responseBody   Json?            @map("response_body")
+  resourceType   String?          @map("resource_type") @db.VarChar(32)
+  resourceId     String?          @map("resource_id") @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at")
+  expiresAt      DateTime         @map("expires_at")
+
+  actor User @relation(fields: [actorUserId], references: [id])
+
+  @@unique([actorUserId, routeKey, idempotencyKey], map: "idempotency_records_actor_route_key_key")
+  @@map("idempotency_records")
+}
+
+// Transactional outbox (IMPLEMENTATION_GUIDE.md §2.8 / §6). The domain event
+// is inserted in the SAME transaction as the financial write, so it commits
+// atomically with the money movement. A separate worker (Milestone 6) will
+// drain unprocessed rows — until then they simply accumulate as `processedAt
+// IS NULL`, which never blocks or fails a transfer.
+model OutboxEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  aggregateType String    @map("aggregate_type") @db.VarChar(32)
+  aggregateId   String    @map("aggregate_id") @db.Uuid
+  eventType     String    @map("event_type") @db.VarChar(80)
+  payload       Json
+  occurredAt    DateTime  @default(now()) @map("occurred_at")
+  processedAt   DateTime? @map("processed_at")
+  attemptCount  Int       @default(0) @map("attempt_count")
+  lastError     String?   @map("last_error")
+
+  @@index([occurredAt], map: "idx_outbox_unprocessed")
+  @@map("outbox_events")
 }
 
 model AuthSession {

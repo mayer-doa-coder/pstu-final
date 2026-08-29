@@ -8,4 +8,5 @@ export interface RateLimitOptions {
 }
 
 /** Marks a route handler as rate-limited; enforced by RateLimitGuard. */
-export const RateLimit = (options: RateLimitOptions): MethodDecorator => SetMetadata(RATE_LIMIT_KEY, options);
+export const RateLimit = (options: RateLimitOptions): MethodDecorator =>
+  SetMetadata(RATE_LIMIT_KEY, options);

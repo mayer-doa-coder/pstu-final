@@ -42,7 +42,9 @@ describe('User discovery (integration)', () => {
       stdio: 'pipe',
     });
 
-    const moduleRef: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
     app = moduleRef.createNestApplication();
     configureApp(app);
     await app.init();
@@ -105,7 +107,10 @@ describe('User discovery (integration)', () => {
     const res = await search(me.cookie, '?q=NABILA@EXAMPLE.COM').expect(200);
 
     expect(res.body.data).toHaveLength(1);
-    expect(res.body.data[0]).toMatchObject({ displayName: 'Nabila Islam', maskedEmail: 'n***@example.com' });
+    expect(res.body.data[0]).toMatchObject({
+      displayName: 'Nabila Islam',
+      maskedEmail: 'n***@example.com',
+    });
   });
 
   it('finds active users by partial display name and excludes the caller and non-matching users', async () => {
@@ -134,8 +139,14 @@ describe('User discovery (integration)', () => {
     await registerAndAuthenticate('susan@example.com', 'Susan Suspended');
     await registerAndAuthenticate('closed@example.com', 'Closed Carl');
 
-    await prisma.user.update({ where: { email: 'susan@example.com' }, data: { status: 'SUSPENDED' } });
-    await prisma.user.update({ where: { email: 'closed@example.com' }, data: { status: 'CLOSED' } });
+    await prisma.user.update({
+      where: { email: 'susan@example.com' },
+      data: { status: 'SUSPENDED' },
+    });
+    await prisma.user.update({
+      where: { email: 'closed@example.com' },
+      data: { status: 'CLOSED' },
+    });
 
     const susanRes = await search(me.cookie, '?q=Susan').expect(200);
     const carlRes = await search(me.cookie, '?q=Carl').expect(200);
@@ -153,7 +164,9 @@ describe('User discovery (integration)', () => {
     expect(res.body.data).toHaveLength(1);
     expect(Object.keys(res.body.data[0]).sort()).toEqual(['displayName', 'id', 'maskedEmail']);
     expect(res.body.data[0].maskedEmail).not.toBe('exposed@example.com');
-    expect(JSON.stringify(res.body.data[0])).not.toMatch(/passwordHash|balanceMinor|status|refreshToken/i);
+    expect(JSON.stringify(res.body.data[0])).not.toMatch(
+      /passwordHash|balanceMinor|status|refreshToken/i,
+    );
   });
 
   it('returns an empty page for a query that matches nobody', async () => {

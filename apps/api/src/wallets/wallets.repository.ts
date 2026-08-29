@@ -25,6 +25,8 @@ export class WalletsRepository {
   }
 
   create(data: CreateWalletData, db: Db): Promise<Wallet> {
-    return db.wallet.create({ data: { userId: data.userId, balanceMinor: data.balanceMinor, currency: 'BDT' } });
+    return db.wallet.create({
+      data: { userId: data.userId, balanceMinor: data.balanceMinor, currency: 'BDT' },
+    });
   }
 }

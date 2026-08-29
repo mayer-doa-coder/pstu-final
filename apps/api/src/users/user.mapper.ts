@@ -13,7 +13,9 @@ export function toUserProfileDto(user: User): UserProfileDto {
   };
 }
 
-export function toUserSearchResultDto(user: Pick<User, 'id' | 'displayName' | 'email'>): UserSearchResultDto {
+export function toUserSearchResultDto(
+  user: Pick<User, 'id' | 'displayName' | 'email'>,
+): UserSearchResultDto {
   return {
     id: user.id,
     displayName: user.displayName,

@@ -79,15 +79,27 @@ export class AuthService {
     const passwordValid = await this.passwordService.verify(hashToVerify, input.password);
 
     if (!user || !passwordValid) {
-      throw new AppException(HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHENTICATED, 'Invalid email or password.');
+      throw new AppException(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.UNAUTHENTICATED,
+        'Invalid email or password.',
+      );
     }
 
     if (user.status === 'SUSPENDED') {
-      throw new AppException(HttpStatus.FORBIDDEN, ErrorCode.FORBIDDEN, 'This account has been suspended.');
+      throw new AppException(
+        HttpStatus.FORBIDDEN,
+        ErrorCode.FORBIDDEN,
+        'This account has been suspended.',
+      );
     }
 
     if (user.status === 'CLOSED') {
-      throw new AppException(HttpStatus.FORBIDDEN, ErrorCode.FORBIDDEN, 'This account has been closed.');
+      throw new AppException(
+        HttpStatus.FORBIDDEN,
+        ErrorCode.FORBIDDEN,
+        'This account has been closed.',
+      );
     }
 
     return user;
@@ -114,25 +126,44 @@ export class AuthService {
    * signature of a stolen/replayed token — every active session for that
    * user is revoked rather than trusting any outstanding token.
    */
-  async refresh(presentedToken: string | undefined, userAgent: string | undefined): Promise<IssuedSession> {
+  async refresh(
+    presentedToken: string | undefined,
+    userAgent: string | undefined,
+  ): Promise<IssuedSession> {
     if (!presentedToken) {
-      throw new AppException(HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHENTICATED, 'Refresh token missing.');
+      throw new AppException(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.UNAUTHENTICATED,
+        'Refresh token missing.',
+      );
     }
 
     const hash = this.tokenService.hashRefreshToken(presentedToken);
     const session = await this.authSessionRepository.findByTokenHash(hash);
 
     if (!session) {
-      throw new AppException(HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHENTICATED, 'Invalid session.');
+      throw new AppException(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.UNAUTHENTICATED,
+        'Invalid session.',
+      );
     }
 
     if (session.revokedAt) {
       await this.authSessionRepository.revokeAllActiveForUser(session.userId);
-      throw new AppException(HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHENTICATED, 'Invalid session.');
+      throw new AppException(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.UNAUTHENTICATED,
+        'Invalid session.',
+      );
     }
 
     if (session.expiresAt.getTime() < Date.now()) {
-      throw new AppException(HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHENTICATED, 'Session expired.');
+      throw new AppException(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.UNAUTHENTICATED,
+        'Session expired.',
+      );
     }
 
     const accessToken = this.tokenService.signAccessToken(session.userId);
@@ -141,7 +172,10 @@ export class AuthService {
 
     await this.prisma.$transaction(async (tx) => {
       await this.authSessionRepository.revoke(session.id, tx);
-      await this.authSessionRepository.create({ userId: session.userId, refreshTokenHash: newHash, userAgent, expiresAt }, tx);
+      await this.authSessionRepository.create(
+        { userId: session.userId, refreshTokenHash: newHash, userAgent, expiresAt },
+        tx,
+      );
     });
 
     return { accessToken, refreshToken: newRefreshToken };
