@@ -72,11 +72,33 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return this.resolveHttpException(exception);
     }
 
+    // Body-parser and other Express middleware throw `http-errors` objects,
+    // which carry a status but are not Nest HttpExceptions. Without this, a
+    // rejected oversized body would surface as a misleading 500 INTERNAL_ERROR
+    // instead of a clean client error.
+    const middlewareStatus = this.clientErrorStatus(exception);
+    if (middlewareStatus !== null) {
+      return {
+        status: middlewareStatus,
+        code: mapStatusToErrorCode(middlewareStatus),
+        // Never echo the middleware's own message — it can quote the payload.
+        message: 'The request could not be processed.',
+      };
+    }
+
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       code: ErrorCode.INTERNAL_ERROR,
       message: 'An unexpected error occurred.',
     };
+  }
+
+  /** A 4xx status attached by Express middleware, or null if this isn't one. */
+  private clientErrorStatus(exception: unknown): number | null {
+    const candidate = exception as { status?: unknown; statusCode?: unknown } | null;
+    const status = candidate?.status ?? candidate?.statusCode;
+
+    return typeof status === 'number' && status >= 400 && status < 500 ? status : null;
   }
 
   private resolveHttpException(exception: HttpException): ResolvedError {
@@ -94,7 +116,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
 function mapStatusToErrorCode(status: number): ErrorCode {
   switch (status) {
+    // An oversized or unparseable body is malformed input, so all three reuse
+    // the catalog's validation code rather than inventing a new one.
     case HttpStatus.BAD_REQUEST:
+    case HttpStatus.PAYLOAD_TOO_LARGE:
+    case HttpStatus.UNSUPPORTED_MEDIA_TYPE:
       return ErrorCode.VALIDATION_ERROR;
     case HttpStatus.UNAUTHORIZED:
       return ErrorCode.UNAUTHENTICATED;

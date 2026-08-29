@@ -1,5 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import type { User, Wallet } from '@prisma/client';
+import { AuditAction } from '../audit/audit-action.enum';
+import { AuditService } from '../audit/audit.service';
 import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../database/prisma.service';
 import { isUniqueConstraintViolation } from '../database/prisma-errors.util';
@@ -28,6 +30,7 @@ export class AuthService {
     private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
     private readonly config: AppConfigService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -41,7 +44,7 @@ export class AuthService {
     const passwordHash = await this.passwordService.hash(input.password);
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const created = await this.prisma.$transaction(async (tx) => {
         const user = await this.usersRepository.create(
           { email: input.email, displayName: input.displayName, passwordHash },
           tx,
@@ -52,6 +55,19 @@ export class AuthService {
         );
         return { user, wallet };
       });
+
+      // Detached: auth auditing is observability, never a reason to fail a
+      // registration that has already committed. Never records the password,
+      // its hash, or any credential material.
+      await this.audit.recordDetached({
+        actorUserId: created.user.id,
+        action: AuditAction.USER_REGISTERED,
+        resourceType: 'user',
+        resourceId: created.user.id,
+        metadata: { walletId: created.wallet.id },
+      });
+
+      return created;
     } catch (error) {
       if (isUniqueConstraintViolation(error, 'email')) {
         throw new AppException(
@@ -79,6 +95,16 @@ export class AuthService {
     const passwordValid = await this.passwordService.verify(hashToVerify, input.password);
 
     if (!user || !passwordValid) {
+      // Audits the *attempt*, never the submitted email or password. When the
+      // account exists the actor id is recorded, which is what makes repeated
+      // failures against one account investigable.
+      await this.audit.recordDetached({
+        actorUserId: user?.id ?? null,
+        action: AuditAction.LOGIN_FAILED,
+        resourceType: 'user',
+        resourceId: user?.id ?? null,
+        metadata: { reason: user ? 'bad_password' : 'unknown_account' },
+      });
       throw new AppException(
         HttpStatus.UNAUTHORIZED,
         ErrorCode.UNAUTHENTICATED,
@@ -86,21 +112,29 @@ export class AuthService {
       );
     }
 
-    if (user.status === 'SUSPENDED') {
+    if (user.status !== 'ACTIVE') {
+      await this.audit.recordDetached({
+        actorUserId: user.id,
+        action: AuditAction.LOGIN_FAILED,
+        resourceType: 'user',
+        resourceId: user.id,
+        metadata: { reason: 'account_not_active', status: user.status },
+      });
       throw new AppException(
         HttpStatus.FORBIDDEN,
         ErrorCode.FORBIDDEN,
-        'This account has been suspended.',
+        user.status === 'SUSPENDED'
+          ? 'This account has been suspended.'
+          : 'This account has been closed.',
       );
     }
 
-    if (user.status === 'CLOSED') {
-      throw new AppException(
-        HttpStatus.FORBIDDEN,
-        ErrorCode.FORBIDDEN,
-        'This account has been closed.',
-      );
-    }
+    await this.audit.recordDetached({
+      actorUserId: user.id,
+      action: AuditAction.LOGIN_SUCCEEDED,
+      resourceType: 'user',
+      resourceId: user.id,
+    });
 
     return user;
   }
@@ -151,6 +185,15 @@ export class AuthService {
 
     if (session.revokedAt) {
       await this.authSessionRepository.revokeAllActiveForUser(session.userId);
+      // High-signal security event: a revoked token being replayed is the
+      // signature of a stolen refresh token.
+      await this.audit.recordDetached({
+        actorUserId: session.userId,
+        action: AuditAction.REFRESH_REUSE_DETECTED,
+        resourceType: 'session',
+        resourceId: session.id,
+        metadata: { allSessionsRevoked: true },
+      });
       throw new AppException(
         HttpStatus.UNAUTHORIZED,
         ErrorCode.UNAUTHENTICATED,
@@ -178,6 +221,13 @@ export class AuthService {
       );
     });
 
+    await this.audit.recordDetached({
+      actorUserId: session.userId,
+      action: AuditAction.SESSION_REFRESHED,
+      resourceType: 'session',
+      resourceId: session.id,
+    });
+
     return { accessToken, refreshToken: newRefreshToken };
   }
 
@@ -192,6 +242,12 @@ export class AuthService {
 
     if (session && !session.revokedAt) {
       await this.authSessionRepository.revoke(session.id);
+      await this.audit.recordDetached({
+        actorUserId: session.userId,
+        action: AuditAction.LOGGED_OUT,
+        resourceType: 'session',
+        resourceId: session.id,
+      });
     }
   }
 }

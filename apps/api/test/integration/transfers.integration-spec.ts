@@ -1,14 +1,9 @@
-import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import * as path from 'node:path';
 import type { INestApplication } from '@nestjs/common';
-import { Test, type TestingModule } from '@nestjs/testing';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import request from 'supertest';
-import { AppModule } from '../../src/app.module';
-import { configureApp } from '../../src/bootstrap';
-import { PrismaService } from '../../src/database/prisma.service';
+import type { PrismaService } from '../../src/database/prisma.service';
 import { TransfersRepository } from '../../src/transfers/transfers.repository';
+import { type IntegrationApp, startIntegrationApp } from './support/integration-app';
 
 /**
  * Milestone 3 correctness proofs for the direct-transfer core, exercised
@@ -21,7 +16,7 @@ import { TransfersRepository } from '../../src/transfers/transfers.repository';
  * AC-6 (balanced ledger), AC-7 (outbox written, worker not required).
  */
 describe('Direct transfer core (integration)', () => {
-  let container: StartedPostgreSqlContainer;
+  let harness: IntegrationApp;
   let app: INestApplication;
   let prisma: PrismaService;
 
@@ -32,46 +27,16 @@ describe('Direct transfer core (integration)', () => {
   }
 
   beforeAll(async () => {
-    container = await new PostgreSqlContainer('postgres:16-alpine').start();
-
-    process.env.DATABASE_URL = container.getConnectionUri();
-    process.env.REDIS_URL = 'redis://localhost:6379';
-    process.env.JWT_ACCESS_SECRET = 'integration-test-secret-at-least-32-characters-long';
-    process.env.NODE_ENV = 'test';
-
-    const repoRoot = path.resolve(__dirname, '../../../..');
-    const schemaPath = path.join(repoRoot, 'database', 'prisma', 'schema.prisma');
-    const prismaCliEntry = path.join(repoRoot, 'node_modules', 'prisma', 'build', 'index.js');
-
-    execFileSync(process.execPath, [prismaCliEntry, 'migrate', 'deploy', '--schema', schemaPath], {
-      env: process.env,
-      stdio: 'pipe',
-    });
-
-    const moduleRef: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = moduleRef.createNestApplication();
-    configureApp(app);
-    await app.init();
-
-    prisma = app.get(PrismaService);
-  }, 120_000);
+    harness = await startIntegrationApp();
+    app = harness.app;
+    prisma = harness.prisma;
+  }, 180_000);
 
   afterAll(async () => {
-    await app.close();
-    await container.stop();
+    await harness?.stop();
   });
 
-  beforeEach(async () => {
-    await prisma.ledgerEntry.deleteMany();
-    await prisma.outboxEvent.deleteMany();
-    await prisma.idempotencyRecord.deleteMany();
-    await prisma.transfer.deleteMany();
-    await prisma.authSession.deleteMany();
-    await prisma.wallet.deleteMany();
-    await prisma.user.deleteMany();
-  });
+  beforeEach(() => harness.reset());
 
   function server(): ReturnType<INestApplication['getHttpServer']> {
     return app.getHttpServer();

@@ -1,0 +1,34 @@
+.gate {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.gateSpinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2.5px solid var(--line-strong);
+  border-top-color: var(--ink);
+  animation: gateSpin 700ms linear infinite;
+}
+
+.gateText {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+@keyframes gateSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gateSpinner {
+    animation-duration: 2s;
+  }
+}

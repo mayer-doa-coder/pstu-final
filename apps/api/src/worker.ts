@@ -10,10 +10,11 @@ async function bootstrap(): Promise<void> {
   });
 
   app.useLogger(logger);
-  logger.log(
-    'Worker process started. No background processors are registered yet — added in Milestone 6.',
-    'Worker',
-  );
+  // Lets OutboxPoller stop its timer on SIGTERM instead of being killed
+  // mid-drain; an interrupted event stays unprocessed and is re-claimed.
+  app.enableShutdownHooks();
+
+  logger.log('Worker process started. Draining outbox events.', 'Worker');
 }
 
 void bootstrap();

@@ -1,0 +1,217 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.header {
+  margin-bottom: var(--space-5);
+}
+
+.title {
+  font-size: clamp(26px, 3.6vw, 34px);
+}
+
+.subtitle {
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  margin-top: 6px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.steps {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+
+.stepActive {
+  color: var(--ink);
+}
+
+.stepDone {
+  color: var(--accent-ink);
+}
+
+.stepMark {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1.5px solid currentColor;
+}
+
+.stepActive .stepMark {
+  background: var(--ink);
+  color: #ffffff;
+  border-color: var(--ink);
+}
+
+.stepDone .stepMark {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+}
+
+.stepBar {
+  flex: 1;
+  min-width: 14px;
+  height: 1.5px;
+  background: var(--line-strong);
+}
+
+.amountInput {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  padding: 14px 16px 14px 42px;
+}
+
+.amountWrap {
+  position: relative;
+}
+
+.currencyMark {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+.quickRow {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* --- Confirmation --- */
+
+.confirmList {
+  display: flex;
+  flex-direction: column;
+  margin: var(--space-2) 0 var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.confirmRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.confirmRow:last-child {
+  border-bottom: none;
+}
+
+.confirmLabel {
+  color: var(--ink-faint);
+  flex: none;
+}
+
+.confirmValue {
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.confirmTotal {
+  background: var(--surface-muted);
+}
+
+.confirmTotalValue {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.confirmActions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* --- Receipt --- */
+
+.receiptTop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-5) 0 var(--space-4);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--space-4);
+}
+
+.receiptMark {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.receiptAmount {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.receiptCaption {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.receiptId {
+  font-family: 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.sideNote {
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.sideNote + .sideNote {
+  margin-top: var(--space-3);
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

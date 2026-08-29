@@ -1,0 +1,199 @@
+.page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.formSide {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6) var(--space-6) var(--space-7);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.brandMark {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--ink);
+  display: grid;
+  place-items: center;
+}
+
+.formWrap {
+  margin: auto;
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-6) 0;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: var(--space-4);
+}
+
+.title {
+  font-size: clamp(30px, 4vw, 40px);
+  margin-bottom: var(--space-2);
+}
+
+.titleAccent {
+  position: relative;
+  display: inline-block;
+}
+
+.titleAccent::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  height: 8px;
+  background: var(--accent);
+  opacity: 0.55;
+  border-radius: 2px;
+  z-index: -1;
+}
+
+.subtitle {
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  margin-bottom: var(--space-5);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.switchLine {
+  margin-top: var(--space-5);
+  font-size: 14px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.switchLink {
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* --- Illustration side --- */
+
+.aside {
+  background: var(--ink);
+  color: #ffffff;
+  padding: var(--space-7) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-5);
+}
+
+.asideTitle {
+  font-size: clamp(24px, 2.6vw, 34px);
+  max-width: 16ch;
+}
+
+.asideAccent {
+  color: var(--accent);
+}
+
+.asideText {
+  color: #b9bcb6;
+  font-size: 14.5px;
+  max-width: 40ch;
+}
+
+.points {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.point {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  font-size: 14px;
+  color: #e6e7e4;
+}
+
+.pointMark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  margin-top: 1px;
+}
+
+.balanceCard {
+  background: var(--accent);
+  color: var(--ink);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  max-width: 320px;
+}
+
+.balanceLabel {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.7;
+}
+
+.balanceValue {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-top: 6px;
+}
+
+.balanceNote {
+  font-size: 12.5px;
+  opacity: 0.75;
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+
+  .aside {
+    display: none;
+  }
+
+  .formSide {
+    padding: var(--space-5) var(--space-4) var(--space-6);
+  }
+}

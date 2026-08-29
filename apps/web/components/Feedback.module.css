@@ -1,0 +1,247 @@
+/* --- Alert --- */
+.alert {
+  display: flex;
+  gap: var(--space-3);
+  padding: 13px 16px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-size: 14px;
+}
+
+.alertBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.alertTitle {
+  font-weight: 600;
+}
+
+.alertMark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.alertError {
+  background: var(--danger-soft);
+  border-color: #f0c9c3;
+  color: #7d2419;
+}
+
+.alertError .alertMark {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.alertSuccess {
+  background: var(--accent-soft);
+  border-color: #aeeac6;
+  color: var(--accent-ink);
+}
+
+.alertSuccess .alertMark {
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.alertWarning {
+  background: var(--warning-soft);
+  border-color: #f0dcae;
+  color: var(--warning-ink);
+}
+
+.alertWarning .alertMark {
+  background: #d19b12;
+  color: #ffffff;
+}
+
+.alertInfo {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink-soft);
+}
+
+.alertInfo .alertMark {
+  background: var(--ink);
+  color: #ffffff;
+}
+
+/* --- Badge --- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.badgeSuccess {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: #aeeac6;
+}
+
+.badgeNeutral {
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  border-color: var(--line-strong);
+}
+
+.badgePending {
+  background: var(--warning-soft);
+  color: var(--warning-ink);
+  border-color: #f0dcae;
+}
+
+.badgeDanger {
+  background: var(--danger-soft);
+  color: #7d2419;
+  border-color: #f0c9c3;
+}
+
+/* --- Card --- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.cardTitle {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cardSubtitle {
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+/* --- Empty state --- */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-soft);
+}
+
+.emptyGlyph {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  display: grid;
+  place-items: center;
+  margin-bottom: var(--space-1);
+}
+
+.emptyTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.emptyText {
+  font-size: 13.5px;
+  max-width: 42ch;
+}
+
+/* --- Skeleton --- */
+.skeleton {
+  background: linear-gradient(90deg, #eceae4 25%, #f5f4f0 37%, #eceae4 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* --- Pending feature --- */
+.pending {
+  background: var(--surface);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.pendingTitle {
+  font-size: 18px;
+}
+
+.pendingText {
+  font-size: 14px;
+  color: var(--ink-soft);
+  max-width: 60ch;
+}
+
+.pendingList {
+  list-style: none;
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-2) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-align: left;
+}
+
+.pendingList li {
+  font-family: 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.pendingLabel {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}

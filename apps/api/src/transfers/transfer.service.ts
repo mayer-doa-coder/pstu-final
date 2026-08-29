@@ -1,5 +1,7 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditAction } from '../audit/audit-action.enum';
+import { AuditService } from '../audit/audit.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { ErrorCode } from '../common/exceptions/error-code.enum';
 import { PrismaService } from '../database/prisma.service';
@@ -34,6 +36,38 @@ export interface CreateDirectTransferCommand {
 }
 
 /**
+ * A transfer that settles an accepted money request. The caller
+ * (MoneyRequestService.accept) already owns the DB transaction and resolves
+ * idempotency at its own route, so this path performs the money movement
+ * only — no transfer-level idempotency claim.
+ */
+export interface SettleMoneyRequestCommand {
+  /** The payer — debited, i.e. the transfer sender. */
+  payerUserId: string;
+  /** The requester — credited, i.e. the transfer receiver. */
+  requesterUserId: string;
+  amountMinor: bigint;
+  currency: 'BDT';
+  note?: string;
+  sourceRequestId: string;
+}
+
+/** What `settle` needs regardless of how the transfer was initiated. */
+interface SettleInput {
+  senderUserId: string;
+  receiverUserId: string;
+  amountMinor: bigint;
+  currency: 'BDT';
+  note?: string;
+}
+
+/** Where a transfer came from — threaded onto the row for linkage/audit. */
+type TransferSource =
+  { type: 'DIRECT'; requestId: null } | { type: 'MONEY_REQUEST'; requestId: string };
+
+const DIRECT_SOURCE: TransferSource = { type: 'DIRECT', requestId: null };
+
+/**
  * The single authoritative path for moving money between two wallets
  * (AGENT.md §3 hard rule). Controllers, and later the money-requests module,
  * call this — no one else debits or credits a wallet.
@@ -51,6 +85,7 @@ export class TransferService {
     private readonly transfers: TransfersRepository,
     private readonly idempotency: IdempotencyService,
     private readonly outbox: OutboxRepository,
+    private readonly audit: AuditService,
   ) {}
 
   async createDirectTransfer(command: CreateDirectTransferCommand): Promise<TransferDto> {
@@ -69,9 +104,48 @@ export class TransferService {
           this.logger.warn(`Transfer attempt ${attempt} hit a write conflict; retrying.`);
           continue;
         }
+        // Audited outside any transaction: the one that failed has already
+        // rolled back, so an in-transaction audit row would have vanished
+        // with it — and a rejected transfer is exactly what an investigator
+        // needs to see. Detached, so auditing can never mask the real error.
+        await this.audit.recordDetached({
+          actorUserId: command.actorUserId,
+          action: AuditAction.TRANSFER_FAILED,
+          resourceType: 'transfer',
+          metadata: {
+            receiverUserId: command.receiverUserId,
+            amountMinor: command.amountMinor.toString(),
+            currency: command.currency,
+            reason: error instanceof AppException ? error.code : 'INTERNAL_ERROR',
+          },
+        });
         throw error;
       }
     }
+  }
+
+  /**
+   * Move money for an accepted money request, inside the caller's
+   * transaction. This is the ONLY entry point the money-requests module uses
+   * to touch balances — it runs the identical debit/credit/ledger/outbox
+   * sequence as a direct transfer, just without the transfer-level
+   * idempotency claim (the caller owns that at its own route).
+   */
+  settleMoneyRequest(
+    tx: Prisma.TransactionClient,
+    command: SettleMoneyRequestCommand,
+  ): Promise<TransferDto> {
+    return this.settle(
+      tx,
+      {
+        senderUserId: command.payerUserId,
+        receiverUserId: command.requesterUserId,
+        amountMinor: command.amountMinor,
+        currency: command.currency,
+        note: command.note,
+      },
+      { type: 'MONEY_REQUEST', requestId: command.sourceRequestId },
+    );
   }
 
   private async runTransfer(
@@ -91,9 +165,44 @@ export class TransferService {
       return begin.responseBody as TransferDto;
     }
 
+    const receipt = await this.settle(
+      tx,
+      {
+        senderUserId: command.actorUserId,
+        receiverUserId: command.receiverUserId,
+        amountMinor: command.amountMinor,
+        currency: command.currency,
+        note: command.note,
+      },
+      DIRECT_SOURCE,
+    );
+
+    // (10) Persist the canonical response, then commit. A later retry with
+    // the same key replays exactly this body.
+    await this.idempotency.complete(tx, {
+      recordId: begin.recordId,
+      responseStatus: HttpStatus.CREATED,
+      responseBody: receipt,
+      resourceType: 'transfer',
+      resourceId: receipt.transferId,
+    });
+
+    return receipt;
+  }
+
+  /**
+   * Steps 2–9 of the canonical transfer sequence: the actual money movement.
+   * Shared verbatim by direct transfers and money-request settlement so
+   * debit/credit logic exists in exactly one place (AGENT.md §3).
+   */
+  private async settle(
+    tx: Prisma.TransactionClient,
+    input: SettleInput,
+    source: TransferSource,
+  ): Promise<TransferDto> {
     // (2) Reject a self-transfer before touching wallets: locking one row
     // twice would be meaningless and the DB CHECK forbids the row anyway.
-    if (command.receiverUserId === command.actorUserId) {
+    if (input.receiverUserId === input.senderUserId) {
       throw new AppException(
         HttpStatus.UNPROCESSABLE_ENTITY,
         ErrorCode.INVALID_TRANSFER,
@@ -102,8 +211,8 @@ export class TransferService {
     }
 
     // (3) Resolve both wallets to learn their ids (needed for lock ordering).
-    const senderProbe = await this.transfers.findWalletByUserId(tx, command.actorUserId);
-    const receiverProbe = await this.transfers.findWalletByUserId(tx, command.receiverUserId);
+    const senderProbe = await this.transfers.findWalletByUserId(tx, input.senderUserId);
+    const receiverProbe = await this.transfers.findWalletByUserId(tx, input.receiverUserId);
 
     if (!senderProbe) {
       // The authenticated caller always has a wallet (created at registration).
@@ -136,7 +245,7 @@ export class TransferService {
     // and account/wallet status can have changed since any earlier screen.
     this.assertParticipantsActive(sender, receiver);
     this.assertWalletsSpendable(sender, receiver);
-    this.assertAmountAndBalance(command.amountMinor, sender);
+    this.assertAmountAndBalance(input.amountMinor, sender);
 
     // (6) Create the PENDING transfer row.
     const transfer = await this.transfers.insertPendingTransfer(tx, {
@@ -144,37 +253,39 @@ export class TransferService {
       receiverUserId: receiver.userId,
       senderWalletId: sender.id,
       receiverWalletId: receiver.id,
-      amountMinor: command.amountMinor,
-      currency: command.currency,
-      note: command.note ?? null,
+      amountMinor: input.amountMinor,
+      currency: input.currency,
+      note: input.note ?? null,
+      sourceType: source.type,
+      sourceRequestId: source.requestId,
     });
 
     // (7) Append the balanced, immutable ledger pair and move the balances.
     // DEBIT = -amount, CREDIT = +amount => SUM(signed_amount_minor) = 0.
-    const senderBalanceAfter = sender.balanceMinor - command.amountMinor;
-    const receiverBalanceAfter = receiver.balanceMinor + command.amountMinor;
+    const senderBalanceAfter = sender.balanceMinor - input.amountMinor;
+    const receiverBalanceAfter = receiver.balanceMinor + input.amountMinor;
 
     await this.transfers.insertLedgerEntry(tx, {
       transferId: transfer.id,
       walletId: sender.id,
       direction: 'DEBIT',
-      amountMinor: command.amountMinor,
-      signedAmountMinor: -command.amountMinor,
-      currency: command.currency,
+      amountMinor: input.amountMinor,
+      signedAmountMinor: -input.amountMinor,
+      currency: input.currency,
       balanceAfterMinor: senderBalanceAfter,
     });
     await this.transfers.insertLedgerEntry(tx, {
       transferId: transfer.id,
       walletId: receiver.id,
       direction: 'CREDIT',
-      amountMinor: command.amountMinor,
-      signedAmountMinor: command.amountMinor,
-      currency: command.currency,
+      amountMinor: input.amountMinor,
+      signedAmountMinor: input.amountMinor,
+      currency: input.currency,
       balanceAfterMinor: receiverBalanceAfter,
     });
 
-    await this.transfers.applyBalanceDelta(tx, sender.id, -command.amountMinor);
-    await this.transfers.applyBalanceDelta(tx, receiver.id, command.amountMinor);
+    await this.transfers.applyBalanceDelta(tx, sender.id, -input.amountMinor);
+    await this.transfers.applyBalanceDelta(tx, receiver.id, input.amountMinor);
 
     // (8) Flip PENDING -> SUCCEEDED (terminal).
     const settled = await this.transfers.markSucceeded(tx, transfer.id);
@@ -189,23 +300,30 @@ export class TransferService {
         transferId: transfer.id,
         senderUserId: sender.userId,
         receiverUserId: receiver.userId,
-        amountMinor: command.amountMinor.toString(),
-        currency: command.currency,
+        amountMinor: input.amountMinor.toString(),
+        currency: input.currency,
+        sourceRequestId: source.requestId,
       },
     });
 
-    // (10) Persist the canonical response, then commit. A later retry with
-    // the same key replays exactly this body.
-    const receipt = toTransferDto(settled, senderBalanceAfter);
-    await this.idempotency.complete(tx, {
-      recordId: begin.recordId,
-      responseStatus: HttpStatus.CREATED,
-      responseBody: receipt,
+    // Audited inside the money transaction so the trail can never disagree
+    // with the ledger — both commit or neither does. Identifiers and amount
+    // only: the user's free-text note is never audited.
+    await this.audit.record(tx, {
+      actorUserId: sender.userId,
+      action: AuditAction.TRANSFER_SUCCEEDED,
       resourceType: 'transfer',
       resourceId: transfer.id,
+      metadata: {
+        receiverUserId: receiver.userId,
+        amountMinor: input.amountMinor.toString(),
+        currency: input.currency,
+        sourceType: source.type,
+        sourceRequestId: source.requestId,
+      },
     });
 
-    return receipt;
+    return toTransferDto(settled, senderBalanceAfter);
   }
 
   /** The payload whose hash detects "same key, different request" reuse. */

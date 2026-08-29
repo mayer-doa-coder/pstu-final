@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { safeText } from '../../common/validation/safe-text';
 
 // Money is integer minor units (poisha). An upper bound well inside
 // Number.MAX_SAFE_INTEGER keeps the value exact through JSON and arithmetic;
@@ -18,7 +19,8 @@ export const createTransferSchema = z.object({
   // MVP is single-currency; accept the field for forward-compatibility but
   // pin it to BDT.
   currency: z.literal('BDT').default('BDT'),
-  note: z.string().trim().max(280).optional(),
+  // Stored and shown to the recipient — user-controlled text rules apply.
+  note: safeText(280).optional(),
 });
 
 export type CreateTransferInput = z.infer<typeof createTransferSchema>;

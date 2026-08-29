@@ -38,6 +38,24 @@ export class UsersRepository {
     return db.user.findUnique({ where: { id } });
   }
 
+  /**
+   * Batch counterparty lookup for the activity feed — one query for every
+   * distinct counterparty on a page, so the feed never issues a per-row
+   * "who is this?" query (IMPLEMENTATION_GUIDE.md §7 — no N+1).
+   */
+  findManyByIds(
+    ids: string[],
+    db: Db = this.prisma,
+  ): Promise<Array<Pick<User, 'id' | 'displayName'>>> {
+    if (ids.length === 0) {
+      return Promise.resolve([]);
+    }
+    return db.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, displayName: true },
+    });
+  }
+
   create(data: CreateUserData, db: Db): Promise<User> {
     return db.user.create({ data });
   }

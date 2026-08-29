@@ -19,6 +19,8 @@ import {
   REFRESH_TOKEN_COOKIE,
 } from '../common/constants/cookie-names';
 import { CsrfGuard } from '../common/guards/csrf.guard';
+import { RateLimit } from '../common/rate-limit/rate-limit.decorator';
+import { RateLimitGuard } from '../common/rate-limit/rate-limit.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { toUserProfileDto } from '../users/user.mapper';
 import type { UserProfileDto } from '../users/dto/user-profile.dto';
@@ -30,6 +32,15 @@ import { registerSchema, type RegisterInput } from './dto/register.schema';
 
 const CSRF_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const REFRESH_TOKEN_PATH = '/api/v1/auth';
+
+// These routes are unauthenticated, so the limiter can only key on client IP.
+// That shapes the budgets: many legitimate users share one address behind
+// carrier or office NAT, so the caps are set to stop scripted abuse without
+// locking out a building. 10 logins/minute blunts credential stuffing while
+// leaving room for a few mistyped passwords; 20 registrations/hour stops bulk
+// account creation but not a genuine group signing up together.
+const LOGIN_RATE_LIMIT = { limit: 10, windowSeconds: 60 };
+const REGISTER_RATE_LIMIT = { limit: 20, windowSeconds: 3600 };
 
 @Controller('auth')
 export class AuthController {
@@ -51,7 +62,8 @@ export class AuthController {
     return { csrfToken };
   }
 
-  @UseGuards(CsrfGuard)
+  @UseGuards(CsrfGuard, RateLimitGuard)
+  @RateLimit(REGISTER_RATE_LIMIT)
   @Post('register')
   async register(
     @Body(new ZodValidationPipe(registerSchema)) body: RegisterInput,
@@ -64,7 +76,8 @@ export class AuthController {
     return { user: toUserProfileDto(user), wallet: toWalletDto(wallet) };
   }
 
-  @UseGuards(CsrfGuard)
+  @UseGuards(CsrfGuard, RateLimitGuard)
+  @RateLimit(LOGIN_RATE_LIMIT)
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(

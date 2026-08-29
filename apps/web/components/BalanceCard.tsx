@@ -1,0 +1,87 @@
+'use client';
+
+import Link from 'next/link';
+import type { ReactElement } from 'react';
+import { formatBdt } from '../lib/money';
+import { useSession } from '../lib/session-context';
+import { Button } from './Button';
+import styles from './BalanceCard.module.css';
+
+/**
+ * Shows the wallet balance exactly as the API last reported it.
+ *
+ * The value is never adjusted locally after a transfer — the card refetches
+ * GET /wallet instead, so the server stays the only source of truth for money.
+ */
+export function BalanceCard({ showActions = true }: { showActions?: boolean }): ReactElement {
+  const { wallet, walletError, isWalletRefreshing, refreshWallet } = useSession();
+  const isUsable = wallet?.status === 'ACTIVE';
+
+  return (
+    <section className={styles.card} aria-label="Wallet balance">
+      <div className={styles.top}>
+        <span className={styles.label}>Available balance</span>
+        <button
+          type="button"
+          className={styles.refresh}
+          onClick={() => void refreshWallet()}
+          disabled={isWalletRefreshing}
+          aria-label="Refresh balance"
+        >
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 15 15"
+            fill="none"
+            className={isWalletRefreshing ? styles.spinning : undefined}
+            aria-hidden="true"
+          >
+            <path
+              d="M13 7.5a5.5 5.5 0 1 1-1.7-3.97M13 1.5v3.2h-3.2"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
+
+      {wallet ? (
+        <p className={`${styles.value} tabular`}>{formatBdt(wallet.balanceMinor)}</p>
+      ) : (
+        <div className={styles.skeletonValue} aria-hidden="true" />
+      )}
+
+      {wallet ? (
+        <div className={styles.meta}>
+          <span
+            className={`${styles.statusPill} ${isUsable ? styles.statusActive : styles.statusBlocked}`}
+          >
+            {wallet.currency} · {wallet.status}
+          </span>
+          <span className={styles.walletId}>Wallet {wallet.walletId.slice(0, 8)}</span>
+        </div>
+      ) : null}
+
+      {walletError ? <p className={styles.error}>{walletError}</p> : null}
+
+      {!isUsable && wallet ? (
+        <p className={styles.error}>
+          This wallet is {wallet.status.toLowerCase()} and cannot send or receive money right now.
+        </p>
+      ) : null}
+
+      {showActions ? (
+        <div className={styles.actions}>
+          <Link href="/send">
+            <Button variant="accent">Send Money</Button>
+          </Link>
+          <Link href="/requests">
+            <Button variant="secondary">Request Money</Button>
+          </Link>
+        </div>
+      ) : null}
+    </section>
+  );
+}

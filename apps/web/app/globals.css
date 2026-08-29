@@ -1,20 +1,124 @@
+/*
+ * Design tokens for the Money Movement UI.
+ *
+ * Palette follows the product reference: an off-white paper canvas, near-black
+ * ink for type and primary actions, and a single mint/green accent reserved for
+ * emphasis (balance card, positive amounts, active nav). Money is never styled
+ * with colour alone — IN/OUT always carry a sign and a label too.
+ */
+:root {
+  --canvas: #f4f3ef;
+  --surface: #ffffff;
+  --surface-muted: #faf9f6;
+
+  --ink: #10110f;
+  --ink-soft: #4b4f4a;
+  --ink-faint: #8a8f88;
+
+  --accent: #57e08a;
+  --accent-strong: #22c55e;
+  --accent-soft: #d6f8e3;
+  --accent-ink: #096c35;
+
+  --danger: #d8412f;
+  --danger-soft: #fbe4e1;
+  --warning-soft: #fdf1d6;
+  --warning-ink: #8a5b06;
+
+  --line: #e3e1da;
+  --line-strong: #cfccc2;
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(16, 17, 15, 0.06);
+  --shadow: 0 8px 24px rgba(16, 17, 15, 0.07);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --shell-width: 1120px;
+}
+
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
+  padding: 0;
   margin: 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
-  color: #1a1a1a;
-  background: #ffffff;
 }
 
-main {
-  max-width: 640px;
-  margin: 4rem auto;
-  padding: 0 1.5rem;
+body {
+  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    'Helvetica Neue',
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  font-weight: 700;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Numeric alignment matters for money columns. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Visible focus for keyboard users on every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

@@ -1,0 +1,137 @@
+.header {
+  margin-bottom: var(--space-5);
+}
+
+.greeting {
+  font-size: clamp(26px, 3.6vw, 34px);
+}
+
+.greetingAccent {
+  position: relative;
+  display: inline-block;
+  z-index: 0;
+}
+
+.greetingAccent::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  bottom: 3px;
+  height: 9px;
+  background: var(--accent);
+  opacity: 0.5;
+  border-radius: 2px;
+  z-index: -1;
+}
+
+.subtitle {
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  margin-top: 6px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.summaryTile {
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summaryLabel {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+}
+
+.summaryValue {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.summaryNote {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.identityRow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  font-size: 13.5px;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.identityRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.identityLabel {
+  color: var(--ink-faint);
+  flex: none;
+}
+
+.identityValue {
+  font-weight: 600;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.viewAll {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.viewAll:hover {
+  color: var(--ink);
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .summaryGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { type LedgerDirection, Prisma, type Transfer } from '@prisma/client';
+import {
+  type LedgerDirection,
+  Prisma,
+  type Transfer,
+  type TransferSourceType,
+} from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 
 /**
@@ -23,6 +28,10 @@ export interface InsertTransferData {
   amountMinor: bigint;
   currency: string;
   note: string | null;
+  // DIRECT for a peer-to-peer send; MONEY_REQUEST (with sourceRequestId set)
+  // when the transfer settles an accepted money request.
+  sourceType: TransferSourceType;
+  sourceRequestId: string | null;
 }
 
 export interface LedgerEntryData {
@@ -118,7 +127,8 @@ export class TransfersRepository {
         currency: data.currency,
         note: data.note,
         status: 'PENDING',
-        sourceType: 'DIRECT',
+        sourceType: data.sourceType,
+        sourceRequestId: data.sourceRequestId,
       },
     });
   }

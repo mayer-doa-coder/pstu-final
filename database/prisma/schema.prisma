@@ -38,6 +38,19 @@ enum TransferStatus {
   FAILED
 }
 
+// Money-request lifecycle (IMPLEMENTATION_GUIDE.md §2.6). Only PENDING is a
+// live state; ACCEPTED / DECLINED / CANCELLED / EXPIRED are terminal and
+// never transition again. EXPIRED is reserved for a future sweeper — until
+// then an elapsed `expiresAt` is derived at read time and blocks acceptance,
+// but the stored value stays PENDING.
+enum MoneyRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  EXPIRED
+}
+
 enum TransferSourceType {
   DIRECT
   MONEY_REQUEST
@@ -76,6 +89,10 @@ model User {
   transfersSent      Transfer[]          @relation("TransferSender")
   transfersReceived  Transfer[]          @relation("TransferReceiver")
   idempotencyRecords IdempotencyRecord[]
+  moneyRequestsMade  MoneyRequest[]      @relation("MoneyRequestRequester")
+  moneyRequestsOwed  MoneyRequest[]      @relation("MoneyRequestPayer")
+  notifications      Notification[]
+  auditEvents        AuditEvent[]
 
   // Serves GET /users/search (Milestone 2): the query always filters
   // status = 'ACTIVE' and sorts by (displayName, id) for cursor pagination,
@@ -122,8 +139,9 @@ model Transfer {
   currency         String             @default("BDT") @db.Char(3)
   status           TransferStatus     @default(PENDING)
   note             String?            @db.VarChar(280)
-  // DIRECT for this milestone; MONEY_REQUEST (with sourceRequestId set) is
-  // added when the money-requests module lands.
+  // DIRECT for a peer-to-peer send; MONEY_REQUEST when created by
+  // MoneyRequestService.accept(), with sourceRequestId pointing at the
+  // originating request (invariant 9.4).
   sourceType       TransferSourceType @default(DIRECT) @map("source_type")
   sourceRequestId  String?            @map("source_request_id") @db.Uuid
   failureCode      String?            @map("failure_code") @db.VarChar(64)
@@ -135,6 +153,8 @@ model Transfer {
   senderWallet   Wallet        @relation("TransferSenderWallet", fields: [senderWalletId], references: [id])
   receiverWallet Wallet        @relation("TransferReceiverWallet", fields: [receiverWalletId], references: [id])
   ledgerEntries  LedgerEntry[]
+  sourceRequest  MoneyRequest? @relation("MoneyRequestSourceTransfer", fields: [sourceRequestId], references: [id])
+  acceptedByRequest MoneyRequest? @relation("MoneyRequestAcceptedTransfer")
 
   @@index([senderUserId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_transfers_sender_created")
   @@index([receiverUserId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_transfers_receiver_created")
@@ -169,6 +189,42 @@ model LedgerEntry {
   @@map("ledger_entries")
 }
 
+// A request for money from `payer` to `requester` (IMPLEMENTATION_GUIDE.md
+// §2.6 / §3.9–§3.14). Creating one moves NO money and touches NO wallet —
+// only `accept` does, and it delegates every debit/credit to the transfer
+// domain (never reimplemented here). The row is locked `FOR UPDATE` before
+// any state transition so concurrent accept/decline/cancel calls serialize
+// and exactly one terminal outcome commits.
+model MoneyRequest {
+  id                 String             @id @default(uuid()) @db.Uuid
+  requesterUserId    String             @map("requester_user_id") @db.Uuid
+  payerUserId        String             @map("payer_user_id") @db.Uuid
+  // Integer minor units (poisha). CHECK (> 0) enforced in the migration.
+  amountMinor        BigInt             @map("amount_minor")
+  currency           String             @default("BDT") @db.Char(3)
+  note               String?            @db.VarChar(280)
+  status             MoneyRequestStatus @default(PENDING)
+  // Set exactly when status becomes ACCEPTED — the transfer that settled this
+  // request (invariant 9.3). UNIQUE: one request per settling transfer.
+  acceptedTransferId String?            @unique @map("accepted_transfer_id") @db.Uuid
+  expiresAt          DateTime?          @map("expires_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  resolvedAt         DateTime?          @map("resolved_at")
+
+  requester        User      @relation("MoneyRequestRequester", fields: [requesterUserId], references: [id])
+  payer            User      @relation("MoneyRequestPayer", fields: [payerUserId], references: [id])
+  acceptedTransfer Transfer? @relation("MoneyRequestAcceptedTransfer", fields: [acceptedTransferId], references: [id])
+  sourceTransfers  Transfer[] @relation("MoneyRequestSourceTransfer")
+
+  // (userId, created_at DESC, id DESC) serves both the incoming/outgoing
+  // request lists and the activity feed's keyset pagination in one scan; the
+  // optional status filter is applied as a residual predicate.
+  @@index([payerUserId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_money_requests_payer_created")
+  @@index([requesterUserId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_money_requests_requester_created")
+  @@map("money_requests")
+}
+
 // Durable retry-safety record (IMPLEMENTATION_GUIDE.md §1.6). One row per
 // (actorUserId, routeKey, idempotencyKey); a completed row stores the exact
 // canonical response so a retried request replays it byte-for-byte instead
@@ -198,8 +254,8 @@ model IdempotencyRecord {
 
 // Transactional outbox (IMPLEMENTATION_GUIDE.md §2.8 / §6). The domain event
 // is inserted in the SAME transaction as the financial write, so it commits
-// atomically with the money movement. A separate worker (Milestone 6) will
-// drain unprocessed rows — until then they simply accumulate as `processedAt
+// atomically with the money movement. The worker process drains unprocessed
+// rows asynchronously; if it is down, rows simply accumulate as `processedAt
 // IS NULL`, which never blocks or fails a transfer.
 model OutboxEvent {
   id            String    @id @default(uuid()) @db.Uuid
@@ -211,9 +267,61 @@ model OutboxEvent {
   processedAt   DateTime? @map("processed_at")
   attemptCount  Int       @default(0) @map("attempt_count")
   lastError     String?   @map("last_error")
+  // Exponential-backoff gate: a failed event is not re-claimable until this
+  // moment passes, so one poisonous row can't spin the worker hot.
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at")
 
   @@index([occurredAt], map: "idx_outbox_unprocessed")
   @@map("outbox_events")
+}
+
+// In-app notification produced by the outbox worker (never by the financial
+// transaction itself). Delivery is at-least-once, so `sourceEventId` +
+// `userId` is UNIQUE: re-processing the same outbox event is a no-op insert
+// rather than a duplicate notification.
+model Notification {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  type          String    @db.VarChar(64)
+  title         String    @db.VarChar(160)
+  body          String    @db.VarChar(500)
+  resourceType  String?   @map("resource_type") @db.VarChar(32)
+  resourceId    String?   @map("resource_id") @db.Uuid
+  readAt        DateTime? @map("read_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  /// The outbox event this notification was derived from — the dedupe key.
+  sourceEventId String    @map("source_event_id") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([sourceEventId, userId], map: "notifications_source_event_user_key")
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_notifications_user_created")
+  @@map("notifications")
+}
+
+// Append-only audit trail for critical actions (IMPLEMENTATION_GUIDE.md
+// §2.10). `metadata` carries only identifiers and safe scalars — never
+// passwords, tokens, CSRF secrets, or free-text note content.
+model AuditEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  /// Null for actions with no authenticated actor (e.g. a failed login).
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  action       String   @db.VarChar(80)
+  resourceType String   @map("resource_type") @db.VarChar(32)
+  resourceId   String?  @map("resource_id") @db.Uuid
+  // The correlation ID from RequestIdMiddleware. VARCHAR, not UUID: a caller
+  // may supply its own `X-Request-Id`, and an audit row must never be lost to
+  // a cast failure.
+  requestId    String?  @map("request_id") @db.VarChar(128)
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([actorUserId, createdAt(sort: Desc)], map: "idx_audit_actor_created")
+  @@index([resourceType, resourceId], map: "idx_audit_resource")
+  @@index([requestId], map: "idx_audit_request")
+  @@map("audit_events")
 }
 
 model AuthSession {

@@ -1,0 +1,58 @@
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: clamp(26px, 3.6vw, 34px);
+}
+
+.subtitle {
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  margin-top: 6px;
+  max-width: 68ch;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.tabs {
+  display: inline-flex;
+  padding: 4px;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  margin-bottom: var(--space-4);
+}
+
+.tab {
+  padding: 7px 16px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.tab:hover:not(.tabActive) {
+  color: var(--ink);
+}
+
+.tabActive {
+  background: var(--ink);
+  color: #ffffff;
+}

@@ -3,6 +3,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { IdempotencyKey } from '../common/decorators/idempotency-key.decorator';
 import { CsrfGuard } from '../common/guards/csrf.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RateLimit } from '../common/rate-limit/rate-limit.decorator';
+import { RateLimitGuard } from '../common/rate-limit/rate-limit.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
 import { createTransferSchema, type CreateTransferInput } from './dto/create-transfer.schema';
@@ -16,6 +18,11 @@ import { TransferQueryService } from './transfer-query.service';
  * domain service. It never touches balances, locks, ledger rows, or
  * idempotency business logic (AGENT.md §3).
  */
+// A per-user ceiling on money movement. Idempotency already collapses honest
+// double-submits, so this exists for the abusive case: a compromised session
+// draining a wallet in a scripted burst. Well above any human send rate.
+const CREATE_TRANSFER_RATE_LIMIT = { limit: 30, windowSeconds: 60 };
+
 @UseGuards(JwtAuthGuard)
 @Controller('transfers')
 export class TransfersController {
@@ -24,7 +31,8 @@ export class TransfersController {
     private readonly transferQueryService: TransferQueryService,
   ) {}
 
-  @UseGuards(CsrfGuard)
+  @UseGuards(CsrfGuard, RateLimitGuard)
+  @RateLimit(CREATE_TRANSFER_RATE_LIMIT)
   @Post()
   createTransfer(
     @Body(new ZodValidationPipe(createTransferSchema)) body: CreateTransferInput,

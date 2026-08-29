@@ -5,7 +5,6 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redis';
 import request from 'supertest';
-import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/bootstrap';
 import { PrismaService } from '../../src/database/prisma.service';
 import { RedisService } from '../../src/redis/redis.service';
@@ -42,6 +41,7 @@ describe('User discovery (integration)', () => {
       stdio: 'pipe',
     });
 
+    const { AppModule } = await import('../../src/app.module');
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -54,9 +54,9 @@ describe('User discovery (integration)', () => {
   }, 120_000);
 
   afterAll(async () => {
-    await app.close();
-    await postgres.stop();
-    await redis.stop();
+    await app?.close();
+    await postgres?.stop();
+    await redis?.stop();
   });
 
   beforeEach(async () => {
