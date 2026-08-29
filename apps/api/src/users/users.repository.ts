@@ -60,6 +60,32 @@ export class UsersRepository {
     return db.user.create({ data });
   }
 
+  /** Used only for the pre-write duplicate-NID check (VerificationService). */
+  findByNidHash(nidHash: string, db: Db = this.prisma): Promise<User | null> {
+    return db.user.findUnique({ where: { nidHash } });
+  }
+
+  setVerification(
+    userId: string,
+    data: {
+      nidHash: string;
+      nidMasked: string;
+      verificationStatus: 'VERIFIED' | 'REJECTED';
+      verifiedAt: Date | null;
+    },
+    db: Db = this.prisma,
+  ): Promise<User> {
+    return db.user.update({
+      where: { id: userId },
+      data: {
+        nidHash: data.nidHash,
+        nidMasked: data.nidMasked,
+        verificationStatus: data.verificationStatus,
+        verifiedAt: data.verifiedAt,
+      },
+    });
+  }
+
   /**
    * Recipient discovery for send/request money (PRD.md §4.3). An `@`
    * in the query is treated as an exact, case-insensitive email lookup

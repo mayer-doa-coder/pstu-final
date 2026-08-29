@@ -1,4 +1,5 @@
 import type { TransferStatus } from '@prisma/client';
+import type { RiskAssessmentDto } from '../../risk/dto/risk-assessment.dto';
 
 /**
  * Canonical transfer representation returned by `POST /transfers` (with
@@ -18,4 +19,6 @@ export interface TransferDto {
   completedAt: string | null;
   /** Sender's wallet balance immediately after this transfer. Present on the create receipt only. */
   senderBalanceAfterMinor?: number;
+  /** The deterministic fraud/risk engine's decision for this transfer. Visible only to its participants. */
+  risk?: RiskAssessmentDto;
 }

@@ -50,6 +50,28 @@ export class AppConfigService {
     return BigInt(this.configService.get('INITIAL_WALLET_BALANCE_MINOR', { infer: true }));
   }
 
+  /** Undefined when the optional LLM risk-explanation feature isn't configured. */
+  get openaiApiKey(): string | undefined {
+    return this.configService.get('OPENAI_API_KEY', { infer: true });
+  }
+
+  /** Undefined falls back to AiExplanationService's own default model. */
+  get openaiModel(): string | undefined {
+    return this.configService.get('OPENAI_MODEL', { infer: true });
+  }
+
+  get dailyTransferLimitMinor(): bigint {
+    return BigInt(this.configService.get('DAILY_TRANSFER_LIMIT_MINOR', { infer: true }));
+  }
+
+  get weeklyTransferLimitMinor(): bigint {
+    return BigInt(this.configService.get('WEEKLY_TRANSFER_LIMIT_MINOR', { infer: true }));
+  }
+
+  get monthlyTransferLimitMinor(): bigint {
+    return BigInt(this.configService.get('MONTHLY_TRANSFER_LIMIT_MINOR', { infer: true }));
+  }
+
   get nodeEnv(): EnvConfig['NODE_ENV'] {
     return this.configService.get('NODE_ENV', { infer: true });
   }

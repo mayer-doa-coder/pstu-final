@@ -22,6 +22,7 @@ import { CsrfGuard } from '../common/guards/csrf.guard';
 import { RateLimit } from '../common/rate-limit/rate-limit.decorator';
 import { RateLimitGuard } from '../common/rate-limit/rate-limit.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { TransactionLimitService } from '../limits/transaction-limit.service';
 import { toUserProfileDto } from '../users/user.mapper';
 import type { UserProfileDto } from '../users/dto/user-profile.dto';
 import { toWalletDto } from '../wallets/wallet.mapper';
@@ -47,6 +48,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly config: AppConfigService,
+    private readonly transactionLimits: TransactionLimitService,
   ) {}
 
   @Get('csrf')
@@ -73,7 +75,10 @@ export class AuthController {
     const { user, wallet } = await this.authService.register(body);
     await this.establishSession(user.id, req, res);
 
-    return { user: toUserProfileDto(user), wallet: toWalletDto(wallet) };
+    // A brand-new wallet has no usage yet, but this reads it the same way
+    // `GET /wallet` does rather than assuming zero — one source of truth.
+    const limits = await this.transactionLimits.getUsage(user.id);
+    return { user: toUserProfileDto(user), wallet: toWalletDto(wallet, limits) };
   }
 
   @UseGuards(CsrfGuard, RateLimitGuard)

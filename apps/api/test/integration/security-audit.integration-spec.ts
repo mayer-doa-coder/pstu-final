@@ -425,9 +425,11 @@ describe('Security hardening and audit (integration)', () => {
       expect(res.headers['x-request-id']).toBe(correlationId);
       const transferId = res.body.data.transferId as string;
 
-      // Investigable by resource id...
+      // Investigable by resource id — a fresh, unverified sender also gets a
+      // separate `transfer.risk_flagged` row for the same resourceId, so the
+      // action itself narrows to the one this test is about.
       const byResource = await prisma.auditEvent.findFirstOrThrow({
-        where: { resourceType: 'transfer', resourceId: transferId },
+        where: { resourceType: 'transfer', resourceId: transferId, action: 'transfer.succeeded' },
       });
       expect(byResource).toMatchObject({
         action: 'transfer.succeeded',

@@ -1,13 +1,17 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { AppException } from '../common/exceptions/app.exception';
 import { ErrorCode } from '../common/exceptions/error-code.enum';
+import { TransactionLimitService } from '../limits/transaction-limit.service';
 import { WalletsRepository } from './wallets.repository';
 import { toWalletDto } from './wallet.mapper';
 import type { WalletDto } from './dto/wallet.dto';
 
 @Injectable()
 export class WalletsService {
-  constructor(private readonly walletsRepository: WalletsRepository) {}
+  constructor(
+    private readonly walletsRepository: WalletsRepository,
+    private readonly transactionLimits: TransactionLimitService,
+  ) {}
 
   async getForUser(userId: string): Promise<WalletDto> {
     const wallet = await this.walletsRepository.findByUserId(userId);
@@ -23,6 +27,7 @@ export class WalletsService {
       );
     }
 
-    return toWalletDto(wallet);
+    const limits = await this.transactionLimits.getUsage(userId);
+    return toWalletDto(wallet, limits);
   }
 }

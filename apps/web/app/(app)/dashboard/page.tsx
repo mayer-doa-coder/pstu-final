@@ -8,6 +8,7 @@ import { Alert, Card, EmptyState } from '../../../components/Feedback';
 import { Button } from '../../../components/Button';
 import { DateTime } from '../../../components/DateTime';
 import { TransferListSkeleton } from '../../../components/TransferList';
+import { VerificationPanel } from '../../../components/VerificationPanel';
 import { useActivity } from '../../../lib/use-activity';
 import { useSession } from '../../../lib/session-context';
 import { formatBdt } from '../../../lib/money';
@@ -92,6 +93,10 @@ export default function DashboardPage(): ReactElement {
                 <span className={styles.summaryNote}>Succeeded transfers only</span>
               </div>
             </div>
+          </Card>
+
+          <Card title="Identity verification">
+            <VerificationPanel />
           </Card>
 
           <Card title="Your account">

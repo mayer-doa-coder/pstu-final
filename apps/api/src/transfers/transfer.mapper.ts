@@ -1,7 +1,12 @@
 import type { Transfer } from '@prisma/client';
+import type { RiskAssessmentDto } from '../risk/dto/risk-assessment.dto';
 import type { TransferDto } from './dto/transfer.dto';
 
-export function toTransferDto(transfer: Transfer, senderBalanceAfterMinor?: bigint): TransferDto {
+export function toTransferDto(
+  transfer: Transfer,
+  senderBalanceAfterMinor?: bigint,
+  risk?: RiskAssessmentDto,
+): TransferDto {
   return {
     transferId: transfer.id,
     status: transfer.status,
@@ -15,5 +20,6 @@ export function toTransferDto(transfer: Transfer, senderBalanceAfterMinor?: bigi
     ...(senderBalanceAfterMinor !== undefined
       ? { senderBalanceAfterMinor: Number(senderBalanceAfterMinor) }
       : {}),
+    ...(risk ? { risk } : {}),
   };
 }

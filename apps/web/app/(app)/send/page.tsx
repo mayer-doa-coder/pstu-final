@@ -302,6 +302,22 @@ export default function SendMoneyPage(): ReactElement {
                 </p>
               </div>
 
+              {receipt.risk && receipt.risk.level !== 'LOW' ? (
+                <Alert
+                  tone={receipt.risk.level === 'HIGH' ? 'warning' : 'info'}
+                  title={`Flagged as ${receipt.risk.level} risk`}
+                >
+                  <ul className={styles.riskReasons}>
+                    {receipt.risk.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                  {receipt.risk.explanation ? (
+                    <p className={styles.riskExplanation}>“{receipt.risk.explanation}”</p>
+                  ) : null}
+                </Alert>
+              ) : null}
+
               <div className={styles.confirmList}>
                 <div className={styles.confirmRow}>
                   <span className={styles.confirmLabel}>Status</span>

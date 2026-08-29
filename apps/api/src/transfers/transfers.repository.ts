@@ -4,12 +4,16 @@ import {
   Prisma,
   type Transfer,
   type TransferSourceType,
+  type VerificationStatus,
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 
 /**
  * Wallet row as seen inside a transfer transaction, joined with just enough
- * of its owner to re-check account status under the lock.
+ * of its owner to re-check account status under the lock — and, since the
+ * join already reaches `users`, the owner's account age and verification
+ * status too, which the risk engine needs and would otherwise cost an extra
+ * query per side.
  */
 export interface LockedWallet {
   id: string;
@@ -18,6 +22,8 @@ export interface LockedWallet {
   status: 'ACTIVE' | 'FROZEN' | 'CLOSED';
   currency: string;
   ownerStatus: 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
+  ownerCreatedAt: Date;
+  ownerVerificationStatus: VerificationStatus;
 }
 
 export interface InsertTransferData {
@@ -51,6 +57,8 @@ interface WalletJoinRow {
   wallet_status: LockedWallet['status'];
   currency: string;
   owner_status: LockedWallet['ownerStatus'];
+  owner_created_at: Date;
+  owner_verification_status: VerificationStatus;
 }
 
 /**
@@ -78,7 +86,8 @@ export class TransfersRepository {
   ): Promise<LockedWallet | null> {
     const rows = await tx.$queryRaw<WalletJoinRow[]>`
       SELECT w.id, w.user_id, w.balance_minor, w.status AS wallet_status,
-             w.currency, u.status AS owner_status
+             w.currency, u.status AS owner_status, u.created_at AS owner_created_at,
+             u.verification_status AS owner_verification_status
       FROM wallets w
       JOIN users u ON u.id = w.user_id
       WHERE w.user_id = ${userId}::uuid
@@ -101,7 +110,8 @@ export class TransfersRepository {
 
     const rows = await tx.$queryRaw<WalletJoinRow[]>`
       SELECT w.id, w.user_id, w.balance_minor, w.status AS wallet_status,
-             w.currency, u.status AS owner_status
+             w.currency, u.status AS owner_status, u.created_at AS owner_created_at,
+             u.verification_status AS owner_verification_status
       FROM wallets w
       JOIN users u ON u.id = w.user_id
       WHERE w.id = ${walletId}::uuid
@@ -188,6 +198,8 @@ export class TransfersRepository {
       status: row.wallet_status,
       currency: row.currency.trim(),
       ownerStatus: row.owner_status,
+      ownerCreatedAt: row.owner_created_at,
+      ownerVerificationStatus: row.owner_verification_status,
     };
   }
 }

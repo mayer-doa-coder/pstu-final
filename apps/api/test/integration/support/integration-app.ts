@@ -14,6 +14,7 @@ import { RedisService } from '../../../src/redis/redis.service';
 const ALL_TABLES = [
   'notifications',
   'audit_events',
+  'risk_assessments',
   'ledger_entries',
   'outbox_events',
   'transfers',

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module';
+import { RiskModule } from '../risk/risk.module';
 import { OutboxProcessor } from './outbox.processor';
 import { OutboxRepository } from './outbox.repository';
 
@@ -10,7 +11,7 @@ import { OutboxRepository } from './outbox.repository';
  * so the API process writes events but never consumes them.
  */
 @Module({
-  imports: [DatabaseModule, NotificationsCoreModule],
+  imports: [DatabaseModule, NotificationsCoreModule, RiskModule],
   providers: [OutboxRepository, OutboxProcessor],
   exports: [OutboxRepository, OutboxProcessor],
 })

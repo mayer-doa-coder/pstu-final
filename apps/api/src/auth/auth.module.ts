@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '../database/database.module';
+import { LimitsModule } from '../limits/limits.module';
 import { UsersModule } from '../users/users.module';
 import { WalletsModule } from '../wallets/wallets.module';
 import { AuthController } from './auth.controller';
@@ -14,6 +15,11 @@ import { TokenService } from './token.service';
     DatabaseModule,
     UsersModule,
     WalletsModule,
+    // WalletsModule doesn't re-export LimitsModule (it only exports
+    // WalletsRepository), so this controller — which composes the register
+    // response's WalletDto itself, same as WalletsService does — needs its
+    // own import to reach TransactionLimitService.
+    LimitsModule,
     // Registered without a static secret: every sign()/verify() call passes
     // its own secret explicitly (AppConfigService.jwtAccessSecret), so this
     // stays a plain token-signing utility rather than a place a secret

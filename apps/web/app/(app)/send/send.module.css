@@ -200,6 +200,21 @@
   font-size: 12px;
 }
 
+.riskReasons {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.riskReasons li {
+  font-size: 13px;
+}
+
+.riskExplanation {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  font-style: italic;
+}
+
 .sideNote {
   font-size: 13px;
   color: var(--ink-soft);

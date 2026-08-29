@@ -24,6 +24,24 @@ export const envSchema = z.object({
   // Wallet — PRD.md §7.7 Ambiguity A: configurable seed balance, default
   // demo value BDT 100,000 = 10,000,000 poisha.
   INITIAL_WALLET_BALANCE_MINOR: z.coerce.number().int().nonnegative().default(10_000_000),
+
+  // Per-user rolling send limits (TransactionLimitService). Defaults are
+  // generous relative to the seed wallet balance — real ceilings, not a
+  // demo tripwire — and independent of each other: a transfer must fit
+  // under all three simultaneously.
+  DAILY_TRANSFER_LIMIT_MINOR: z.coerce.number().int().positive().default(100_000_000), // BDT 1,000,000
+  WEEKLY_TRANSFER_LIMIT_MINOR: z.coerce.number().int().positive().default(300_000_000), // BDT 3,000,000
+  MONTHLY_TRANSFER_LIMIT_MINOR: z.coerce.number().int().positive().default(1_000_000_000), // BDT 10,000,000
+
+  // Risk engine — entirely optional. The deterministic score/level/reasons
+  // work with no key at all; this only unlocks the plain-language LLM
+  // explanation for HIGH-risk transfers (AiExplanationService no-ops without
+  // it, never blocking or degrading the risk engine itself). No `.min(1)`:
+  // Docker Compose interpolates an unset host variable as an empty string
+  // rather than omitting the key, and an empty string must still validate —
+  // AiExplanationService treats it the same as "not configured".
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

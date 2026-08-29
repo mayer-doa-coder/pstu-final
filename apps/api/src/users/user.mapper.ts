@@ -10,6 +10,8 @@ export function toUserProfileDto(user: User): UserProfileDto {
     displayName: user.displayName,
     status: user.status,
     createdAt: user.createdAt.toISOString(),
+    verificationStatus: user.verificationStatus,
+    nidMasked: user.nidMasked,
   };
 }
 

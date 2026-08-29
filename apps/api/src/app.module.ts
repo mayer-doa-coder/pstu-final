@@ -10,6 +10,7 @@ import { TransfersModule } from './transfers/transfers.module';
 import { MoneyRequestsModule } from './money-requests/money-requests.module';
 import { ActivityModule } from './activity/activity.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { VerificationModule } from './verification/verification.module';
 import { AuditModule } from './audit/audit.module';
 import { SecurityModule } from './security/security.module';
 import { SecurityHeadersMiddleware } from './security/security-headers.middleware';
@@ -35,6 +36,7 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
     MoneyRequestsModule,
     ActivityModule,
     NotificationsModule,
+    VerificationModule,
   ],
 })
 export class AppModule implements NestModule {

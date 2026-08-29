@@ -18,6 +18,7 @@ import type {
   Transfer,
   UserProfile,
   UserSearchResult,
+  VerificationResult,
   Wallet,
 } from './api-types';
 
@@ -180,4 +181,17 @@ export function listNotifications(
 
 export function markNotificationRead(notificationId: string): Promise<AppNotification> {
   return apiRequest<AppNotification>(`/notifications/${notificationId}/read`, { method: 'POST' });
+}
+
+/**
+ * Submits an NID for simulated verification. Moves no money, so — unlike
+ * `createTransfer` — this needs no idempotency key: resubmitting the same
+ * already-verified NID is a no-op on the server, and resubmitting after a
+ * rejection is a legitimate new attempt each time.
+ */
+export function submitNid(nidNumber: string): Promise<VerificationResult> {
+  return apiRequest<VerificationResult>('/verification/nid', {
+    method: 'POST',
+    body: { nidNumber },
+  });
 }

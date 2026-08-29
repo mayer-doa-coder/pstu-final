@@ -14,12 +14,25 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
 export type WalletStatus = 'ACTIVE' | 'FROZEN' | 'CLOSED';
 export type TransferStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED';
 
+export type VerificationStatus = 'UNVERIFIED' | 'VERIFIED' | 'REJECTED';
+
 export interface UserProfile {
   id: string;
   email: string;
   displayName: string;
   status: UserStatus;
   createdAt: string;
+  /** Simulated NID/KYC status — VERIFIED is the badge shown in the UI. */
+  verificationStatus: VerificationStatus;
+  /** e.g. `••••••7890`. Null until the user has submitted an NID. */
+  nidMasked: string | null;
+}
+
+/** Response of `POST /verification/nid`. */
+export interface VerificationResult {
+  verificationStatus: VerificationStatus;
+  nidMasked: string | null;
+  verifiedAt: string | null;
 }
 
 export interface UserSearchResult {
@@ -28,11 +41,36 @@ export interface UserSearchResult {
   maskedEmail: string;
 }
 
+export interface LimitWindow {
+  limitMinor: number;
+  usedMinor: number;
+  remainingMinor: number;
+}
+
+/** Current usage against the caller's rolling daily/weekly/monthly send limits. */
+export interface LimitUsage {
+  daily: LimitWindow;
+  weekly: LimitWindow;
+  monthly: LimitWindow;
+}
+
 export interface Wallet {
   walletId: string;
   currency: string;
   balanceMinor: number;
   status: WalletStatus;
+  limits: LimitUsage;
+}
+
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+/** The deterministic fraud/risk engine's decision for a transfer. */
+export interface TransferRisk {
+  score: number;
+  level: RiskLevel;
+  reasons: string[];
+  /** Plain-language gloss from the optional LLM step; null until produced (HIGH only) or if never configured. */
+  explanation: string | null;
 }
 
 export interface Transfer {
@@ -47,6 +85,7 @@ export interface Transfer {
   completedAt: string | null;
   /** Present on the create receipt only. */
   senderBalanceAfterMinor?: number;
+  risk?: TransferRisk;
 }
 
 export type MoneyRequestStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED' | 'EXPIRED';
@@ -124,6 +163,7 @@ export type ApiErrorCode =
   | 'TRANSFER_NOT_FOUND'
   | 'MONEY_REQUEST_NOT_FOUND'
   | 'INSUFFICIENT_BALANCE'
+  | 'TRANSFER_LIMIT_EXCEEDED'
   | 'REQUEST_ALREADY_RESOLVED'
   | 'IDEMPOTENCY_KEY_REUSED'
   | 'WALLET_UNAVAILABLE'

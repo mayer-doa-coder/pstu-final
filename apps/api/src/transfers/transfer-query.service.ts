@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { AppException } from '../common/exceptions/app.exception';
 import { ErrorCode } from '../common/exceptions/error-code.enum';
+import { RiskRepository } from '../risk/risk.repository';
 import { TransfersRepository } from './transfers.repository';
 import { toTransferDto } from './transfer.mapper';
 import type { TransferDto } from './dto/transfer.dto';
@@ -16,7 +17,10 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  */
 @Injectable()
 export class TransferQueryService {
-  constructor(private readonly transfers: TransfersRepository) {}
+  constructor(
+    private readonly transfers: TransfersRepository,
+    private readonly risk: RiskRepository,
+  ) {}
 
   async getForParticipant(transferId: string, requesterUserId: string): Promise<TransferDto> {
     if (!UUID_PATTERN.test(transferId)) {
@@ -34,7 +38,22 @@ export class TransferQueryService {
       throw this.notFound();
     }
 
-    return toTransferDto(transfer);
+    // Every SUCCEEDED transfer has one; a PENDING/FAILED transfer (mid- or
+    // never-settled) has none yet, so this stays undefined rather than throwing.
+    const assessment = await this.risk.findByTransferId(transferId);
+
+    return toTransferDto(
+      transfer,
+      undefined,
+      assessment
+        ? {
+            score: assessment.score,
+            level: assessment.level,
+            reasons: assessment.reasons as string[],
+            explanation: assessment.explanation,
+          }
+        : undefined,
+    );
   }
 
   private notFound(): AppException {

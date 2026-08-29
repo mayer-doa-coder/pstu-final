@@ -67,6 +67,24 @@ enum IdempotencyState {
   FAILED
 }
 
+// Simulated NID/KYC verification. UNVERIFIED is the default for every new
+// user; VERIFIED and REJECTED are both reachable from UNVERIFIED, and a
+// REJECTED user may resubmit (VERIFIED is the only terminal state — see
+// VerificationService).
+enum VerificationStatus {
+  UNVERIFIED
+  VERIFIED
+  REJECTED
+}
+
+// Output tier of the deterministic fraud/risk engine — see RiskEngineService
+// for the rules that produce it.
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model User {
   // Native UUID column per IMPLEMENTATION_GUIDE.md §2.2. Generated as
   // UUIDv4 (Prisma's built-in default) rather than the guide's UUIDv7
@@ -83,6 +101,15 @@ model User {
   status       UserStatus @default(ACTIVE)
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  // Simulated NID/KYC verification (VerificationService). Only a SHA-256
+  // hash of the NID is ever persisted, never the number itself — the hash's
+  // UNIQUE constraint is what stops the same NID being used to "verify"
+  // multiple accounts, a real fraud vector this demo still models honestly.
+  nidHash            String?            @unique @map("nid_hash") @db.Char(64)
+  nidMasked          String?            @map("nid_masked") @db.VarChar(20)
+  verificationStatus VerificationStatus @default(UNVERIFIED) @map("verification_status")
+  verifiedAt         DateTime?          @map("verified_at")
 
   wallet             Wallet?
   authSessions       AuthSession[]
@@ -155,6 +182,7 @@ model Transfer {
   ledgerEntries  LedgerEntry[]
   sourceRequest  MoneyRequest? @relation("MoneyRequestSourceTransfer", fields: [sourceRequestId], references: [id])
   acceptedByRequest MoneyRequest? @relation("MoneyRequestAcceptedTransfer")
+  riskAssessment RiskAssessment?
 
   @@index([senderUserId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_transfers_sender_created")
   @@index([receiverUserId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_transfers_receiver_created")
@@ -223,6 +251,27 @@ model MoneyRequest {
   @@index([payerUserId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_money_requests_payer_created")
   @@index([requesterUserId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_money_requests_requester_created")
   @@map("money_requests")
+}
+
+// One deterministic fraud/risk score per transfer, written inside the same
+// transaction that settles the money — the decision can never disagree with
+// what actually happened (RiskEngineService). `explanation` is optional and
+// filled in later, out of band, only for HIGH-risk rows: a plain-language
+// gloss from an LLM, purely cosmetic and never re-evaluated or blocking.
+model RiskAssessment {
+  id          String    @id @default(uuid()) @db.Uuid
+  transferId  String    @unique @map("transfer_id") @db.Uuid
+  score       Int
+  level       RiskLevel
+  /// The rule names that fired, in evaluation order — see RiskEngineService.
+  reasons     Json
+  explanation String?   @db.VarChar(600)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  transfer Transfer @relation(fields: [transferId], references: [id])
+
+  @@index([level, createdAt(sort: Desc)], map: "idx_risk_assessments_level_created")
+  @@map("risk_assessments")
 }
 
 // Durable retry-safety record (IMPLEMENTATION_GUIDE.md §1.6). One row per

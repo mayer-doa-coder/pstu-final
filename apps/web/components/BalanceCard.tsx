@@ -2,10 +2,37 @@
 
 import Link from 'next/link';
 import type { ReactElement } from 'react';
+import type { LimitWindow } from '../lib/api-types';
 import { formatBdt } from '../lib/money';
 import { useSession } from '../lib/session-context';
 import { Button } from './Button';
 import styles from './BalanceCard.module.css';
+
+/** One daily/weekly/monthly send-limit row: usage against the configured ceiling. */
+function LimitRow({ label, usage }: { label: string; usage: LimitWindow }): ReactElement {
+  const percentUsed =
+    usage.limitMinor > 0 ? Math.min(100, (usage.usedMinor / usage.limitMinor) * 100) : 0;
+  // Warns before the limit is actually hit, not just after — the same
+  // headroom a user would otherwise only discover from a failed transfer.
+  const isNearLimit = percentUsed >= 80;
+
+  return (
+    <div className={styles.limitRow}>
+      <div className={styles.limitRowTop}>
+        <span>{label}</span>
+        <span className="tabular">
+          {formatBdt(usage.usedMinor)} / {formatBdt(usage.limitMinor)}
+        </span>
+      </div>
+      <div className={styles.limitTrack}>
+        <div
+          className={`${styles.limitFill} ${isNearLimit ? styles.limitFillWarn : ''}`}
+          style={{ width: `${percentUsed}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 /**
  * Shows the wallet balance exactly as the API last reported it.
@@ -70,6 +97,15 @@ export function BalanceCard({ showActions = true }: { showActions?: boolean }): 
         <p className={styles.error}>
           This wallet is {wallet.status.toLowerCase()} and cannot send or receive money right now.
         </p>
+      ) : null}
+
+      {wallet ? (
+        <div className={styles.limits}>
+          <span className={styles.limitsLabel}>Sending limits</span>
+          <LimitRow label="Today" usage={wallet.limits.daily} />
+          <LimitRow label="This week" usage={wallet.limits.weekly} />
+          <LimitRow label="This month" usage={wallet.limits.monthly} />
+        </div>
       ) : null}
 
       {showActions ? (

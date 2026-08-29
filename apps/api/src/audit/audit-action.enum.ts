@@ -16,11 +16,16 @@ export enum AuditAction {
 
   TRANSFER_SUCCEEDED = 'transfer.succeeded',
   TRANSFER_FAILED = 'transfer.failed',
+  /** The deterministic risk engine scored a transfer MEDIUM or HIGH. */
+  TRANSFER_RISK_FLAGGED = 'transfer.risk_flagged',
 
   MONEY_REQUEST_CREATED = 'money_request.created',
   MONEY_REQUEST_ACCEPTED = 'money_request.accepted',
   MONEY_REQUEST_DECLINED = 'money_request.declined',
   MONEY_REQUEST_CANCELLED = 'money_request.cancelled',
+
+  NID_VERIFIED = 'user.nid_verified',
+  NID_REJECTED = 'user.nid_rejected',
 }
 
 /** Resource families an audit row can point at. */

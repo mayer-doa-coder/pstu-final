@@ -363,6 +363,7 @@ describe('Direct transfer core (integration)', () => {
 
       for (let round = 0; round < 5; round++) {
         await prisma.ledgerEntry.deleteMany();
+        await prisma.riskAssessment.deleteMany();
         await prisma.transfer.deleteMany();
         await prisma.idempotencyRecord.deleteMany();
         await setBalance(alice.id, 100n);

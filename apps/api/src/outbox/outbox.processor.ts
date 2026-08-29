@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationConsumer } from '../notifications/notification.consumer';
+import { RiskExplanationConsumer } from '../risk/risk-explanation.consumer';
 import { type ClaimedOutboxEvent, OutboxRepository } from './outbox.repository';
 
 /**
@@ -44,6 +45,7 @@ export class OutboxProcessor {
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxRepository,
     private readonly notifications: NotificationConsumer,
+    private readonly riskExplainer: RiskExplanationConsumer,
   ) {}
 
   /**
@@ -70,11 +72,13 @@ export class OutboxProcessor {
   private async processNext(): Promise<'processed' | 'failed' | 'idle'> {
     // Holds the event across the try/catch boundary: on failure we need to
     // know which event to charge the attempt to, but the transaction that
-    // claimed it has already rolled back.
+    // claimed it has already rolled back. Also read after a successful
+    // commit, for the out-of-transaction follow-up below.
     const inFlight: { event: ClaimedOutboxEvent | null } = { event: null };
+    let outcome: 'processed' | 'failed' | 'idle';
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      outcome = await this.prisma.$transaction(async (tx) => {
         const claimed = await this.outbox.claimNext(tx, MAX_ATTEMPTS);
         if (!claimed) {
           return 'idle' as const;
@@ -96,6 +100,19 @@ export class OutboxProcessor {
       await this.recordFailure(inFlight.event, error as Error);
       return 'failed';
     }
+
+    // Best-effort, out-of-transaction follow-up (currently: the optional
+    // LLM risk explanation). Deliberately outside the transaction above — it
+    // may call an external API, and holding a DB transaction (with the
+    // event's row lock) open across a network call would stall other outbox
+    // rows and risk the transaction's own timeout. The event is already
+    // committed as processed by this point, so a failure here can only ever
+    // mean an optional annotation stays unset — never a reason to retry.
+    if (outcome === 'processed' && inFlight.event) {
+      await this.riskExplainer.tryExplain(inFlight.event);
+    }
+
+    return outcome;
   }
 
   private async dispatch(tx: Prisma.TransactionClient, event: ClaimedOutboxEvent): Promise<void> {

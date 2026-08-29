@@ -7,7 +7,11 @@ import { ErrorCode } from '../common/exceptions/error-code.enum';
 import { PrismaService } from '../database/prisma.service';
 import { isRetryableTransactionError } from '../database/prisma-errors.util';
 import { IdempotencyService } from '../idempotency/idempotency.service';
+import { TransactionLimitService } from '../limits/transaction-limit.service';
 import { OutboxRepository } from '../outbox/outbox.repository';
+import { HIGH_VELOCITY_WINDOW_MINUTES, RiskEngineService } from '../risk/risk-engine.service';
+import { RiskRepository } from '../risk/risk.repository';
+import type { RiskAssessmentDto } from '../risk/dto/risk-assessment.dto';
 import { type LockedWallet, TransfersRepository } from './transfers.repository';
 import { toTransferDto } from './transfer.mapper';
 import type { TransferDto } from './dto/transfer.dto';
@@ -86,6 +90,9 @@ export class TransferService {
     private readonly idempotency: IdempotencyService,
     private readonly outbox: OutboxRepository,
     private readonly audit: AuditService,
+    private readonly riskEngine: RiskEngineService,
+    private readonly riskRepository: RiskRepository,
+    private readonly transactionLimits: TransactionLimitService,
   ) {}
 
   async createDirectTransfer(command: CreateDirectTransferCommand): Promise<TransferDto> {
@@ -247,6 +254,13 @@ export class TransferService {
     this.assertWalletsSpendable(sender, receiver);
     this.assertAmountAndBalance(input.amountMinor, sender);
 
+    // (5b) Re-check the sender's rolling daily/weekly/monthly send limits
+    // under the same lock, for the same reason the balance is re-checked
+    // here rather than only on an earlier screen: usage can change between
+    // when a client saw it and when this transaction runs. Applies to a
+    // money-request accept too — the payer is still the one sending money.
+    await this.transactionLimits.assertWithinLimits(tx, sender.userId, input.amountMinor);
+
     // (6) Create the PENDING transfer row.
     const transfer = await this.transfers.insertPendingTransfer(tx, {
       senderUserId: sender.userId,
@@ -290,6 +304,19 @@ export class TransferService {
     // (8) Flip PENDING -> SUCCEEDED (terminal).
     const settled = await this.transfers.markSucceeded(tx, transfer.id);
 
+    // (8b) Score the transfer with the deterministic risk engine and record
+    // the decision — every transfer gets an assessment row, not just the
+    // flagged ones, so the audit trail can show what a LOW score looked like
+    // too. This never blocks or fails the transfer (AGENT.md: detection, not
+    // prevention); it only annotates a transfer that has already committed.
+    const riskAssessment = await this.assessRisk(
+      tx,
+      transfer.id,
+      sender,
+      receiver,
+      input.amountMinor,
+    );
+
     // (9) Outbox event, same transaction — notifications/analytics are
     // produced later by the worker and never gate this commit.
     await this.outbox.insert(tx, {
@@ -323,7 +350,63 @@ export class TransferService {
       },
     });
 
-    return toTransferDto(settled, senderBalanceAfter);
+    return toTransferDto(settled, senderBalanceAfter, riskAssessment);
+  }
+
+  /**
+   * Runs the deterministic risk rules and persists the result. A MEDIUM or
+   * HIGH score is also audited as its own event (a LOW score is still
+   * recorded on the transfer, just not separately audited — routine, not
+   * noteworthy). Only HIGH gets an outbox event, since that is the only tier
+   * with a follow-up action (the optional plain-language explanation).
+   */
+  private async assessRisk(
+    tx: Prisma.TransactionClient,
+    transferId: string,
+    sender: LockedWallet,
+    receiver: LockedWallet,
+    amountMinor: bigint,
+  ): Promise<RiskAssessmentDto> {
+    const now = new Date();
+    const sinceDate = new Date(now.getTime() - HIGH_VELOCITY_WINDOW_MINUTES * 60_000);
+    const senderRecentTransferCount = await this.riskRepository.countRecentTransfersFromSender(
+      tx,
+      sender.userId,
+      sinceDate,
+    );
+
+    const { score, level, reasons } = this.riskEngine.evaluate({
+      amountMinor,
+      senderBalanceBeforeMinor: sender.balanceMinor,
+      senderCreatedAt: sender.ownerCreatedAt,
+      receiverCreatedAt: receiver.ownerCreatedAt,
+      senderVerificationStatus: sender.ownerVerificationStatus,
+      senderRecentTransferCount,
+      now,
+    });
+
+    await this.riskRepository.insertAssessment(tx, { transferId, score, level, reasons });
+
+    if (level !== 'LOW') {
+      await this.audit.record(tx, {
+        actorUserId: sender.userId,
+        action: AuditAction.TRANSFER_RISK_FLAGGED,
+        resourceType: 'transfer',
+        resourceId: transferId,
+        metadata: { score, level, reasons: reasons.join(' | ') },
+      });
+    }
+
+    if (level === 'HIGH') {
+      await this.outbox.insert(tx, {
+        aggregateType: 'transfer',
+        aggregateId: transferId,
+        eventType: 'transfer.risk_flagged',
+        payload: { score, level, reasons },
+      });
+    }
+
+    return { score, level, reasons, explanation: null };
   }
 
   /** The payload whose hash detects "same key, different request" reuse. */

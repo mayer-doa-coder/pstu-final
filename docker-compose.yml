@@ -75,6 +75,9 @@ services:
       JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
       INITIAL_WALLET_BALANCE_MINOR: ${INITIAL_WALLET_BALANCE_MINOR:-10000000}
+      DAILY_TRANSFER_LIMIT_MINOR: ${DAILY_TRANSFER_LIMIT_MINOR:-100000000}
+      WEEKLY_TRANSFER_LIMIT_MINOR: ${WEEKLY_TRANSFER_LIMIT_MINOR:-300000000}
+      MONTHLY_TRANSFER_LIMIT_MINOR: ${MONTHLY_TRANSFER_LIMIT_MINOR:-1000000000}
     ports:
       - '${PORT:-4000}:4000'
     depends_on:
@@ -113,6 +116,11 @@ services:
       JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
       INITIAL_WALLET_BALANCE_MINOR: ${INITIAL_WALLET_BALANCE_MINOR:-10000000}
+      # Optional: only the worker calls the OpenAI API (to gloss a HIGH-risk
+      # transfer in plain language). Unset/empty = that one follow-up step
+      # no-ops; the deterministic risk engine is unaffected.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
     depends_on:
       postgres:
         condition: service_healthy
