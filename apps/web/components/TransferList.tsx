@@ -44,8 +44,7 @@ export function TransferList({ items }: { items: readonly TransferListItem[] }):
   return (
     <ul className={styles.list}>
       {items.map(({ transfer, direction, counterpartyName }) => {
-        const counterpartyId =
-          direction === 'in' ? transfer.senderUserId : transfer.receiverUserId;
+        const counterpartyId = direction === 'in' ? transfer.senderUserId : transfer.receiverUserId;
 
         return (
           <li key={transfer.transferId} className={styles.row}>

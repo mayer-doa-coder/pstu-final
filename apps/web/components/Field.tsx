@@ -1,6 +1,11 @@
 'use client';
 
-import { useId, type InputHTMLAttributes, type ReactElement, type TextareaHTMLAttributes } from 'react';
+import {
+  useId,
+  type InputHTMLAttributes,
+  type ReactElement,
+  type TextareaHTMLAttributes,
+} from 'react';
 import styles from './Field.module.css';
 
 interface CommonProps {

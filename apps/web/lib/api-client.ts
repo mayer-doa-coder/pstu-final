@@ -152,9 +152,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<S
   }
 
   const payload = (await response.json().catch(() => null)) as
-    | SuccessEnvelope<T>
-    | ErrorEnvelope
-    | null;
+    SuccessEnvelope<T> | ErrorEnvelope | null;
 
   if (!response.ok) {
     const envelope = (payload ?? {}) as ErrorEnvelope;

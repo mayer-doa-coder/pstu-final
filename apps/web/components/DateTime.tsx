@@ -9,7 +9,13 @@ import { useEffect, useState, type ReactElement } from 'react';
  * first client render agree (the server has no access to the browser's time
  * zone), avoiding a hydration mismatch.
  */
-export function DateTime({ value, mode = 'full' }: { value: string; mode?: 'full' | 'short' }): ReactElement {
+export function DateTime({
+  value,
+  mode = 'full',
+}: {
+  value: string;
+  mode?: 'full' | 'short';
+}): ReactElement {
   const [formatted, setFormatted] = useState<string | null>(null);
 
   useEffect(() => {

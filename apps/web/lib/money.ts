@@ -33,9 +33,7 @@ export function formatSignedBdt(amountMinor: number, direction: 'in' | 'out'): s
   return `${direction === 'in' ? '+' : '-'}৳${formatMinorAmount(Math.abs(amountMinor))}`;
 }
 
-export type AmountParseResult =
-  | { ok: true; amountMinor: number }
-  | { ok: false; message: string };
+export type AmountParseResult = { ok: true; amountMinor: number } | { ok: false; message: string };
 
 /**
  * Parses a user-typed BDT amount ("2,500.75") into integer poisha.

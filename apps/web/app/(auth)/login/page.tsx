@@ -41,9 +41,7 @@ export default function LoginPage(): ReactElement {
       await refreshSession();
       router.replace('/dashboard');
     } catch (cause) {
-      setError(
-        cause instanceof ApiError ? cause.message : 'Could not sign in. Please try again.',
-      );
+      setError(cause instanceof ApiError ? cause.message : 'Could not sign in. Please try again.');
       setIsSubmitting(false);
     }
   }
