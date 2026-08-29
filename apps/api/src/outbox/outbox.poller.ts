@@ -43,9 +43,13 @@ export class OutboxPoller implements OnModuleInit, OnApplicationShutdown {
     if (this.stopped) {
       return;
     }
+    // Deliberately NOT unref'd: this timer is the only thing keeping the
+    // worker process's event loop alive (worker.ts binds no HTTP listener).
+    // An unref'd timer lets Node treat the process as idle the instant
+    // nothing else is pending and exit before the timer ever fires — which
+    // is exactly what happened here: one drain, then immediate exit,
+    // repeating forever under `restart: unless-stopped`.
     this.timer = setTimeout(() => void this.tick(), delayMs);
-    // Don't hold the event loop open purely for the next poll.
-    this.timer.unref?.();
   }
 
   private async tick(): Promise<void> {
