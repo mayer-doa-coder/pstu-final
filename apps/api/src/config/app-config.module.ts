@@ -1,8 +1,12 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppConfigService } from './app-config.service';
 import { validateEnv } from './env.schema';
 
+// Global: typed config is cross-cutting infrastructure. Other global modules
+// (e.g. RedisModule) inject AppConfigService without importing this module,
+// so it must be available application-wide, not only where it's imported.
+@Global()
 @Module({
   imports: [
     ConfigModule.forRoot({

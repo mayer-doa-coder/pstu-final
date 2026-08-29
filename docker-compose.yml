@@ -68,6 +68,13 @@ services:
       REDIS_URL: redis://redis:6379
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Required by the env schema (no default — a money service must never
+      # boot with a guessable signing key). The fallback here is for local
+      # `docker compose up` only; override via .env / real secrets elsewhere.
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-only-change-me-0123456789abcdef0123456789}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
+      INITIAL_WALLET_BALANCE_MINOR: ${INITIAL_WALLET_BALANCE_MINOR:-10000000}
     ports:
       - '${PORT:-4000}:4000'
     depends_on:
@@ -100,6 +107,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-money_movement}:${POSTGRES_PASSWORD:-money_movement}@postgres:5432/${POSTGRES_DB:-money_movement}?schema=public
       REDIS_URL: redis://redis:6379
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # The worker boots the same AppConfigModule as the API, which validates
+      # the full env schema — so it needs the (defaultless) JWT secret too.
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-only-change-me-0123456789abcdef0123456789}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
+      INITIAL_WALLET_BALANCE_MINOR: ${INITIAL_WALLET_BALANCE_MINOR:-10000000}
     depends_on:
       postgres:
         condition: service_healthy
