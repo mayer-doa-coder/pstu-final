@@ -1,6 +1,7 @@
 import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import { AppConfigModule } from './config/app-config.module';
 import { DatabaseModule } from './database/database.module';
+import { RedisModule } from './redis/redis.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -14,7 +15,7 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
  * IMPLEMENTATION_GUIDE.md §1.3 for the full module boundary list.
  */
 @Module({
-  imports: [AppConfigModule, DatabaseModule, HealthModule, AuthModule, UsersModule, WalletsModule],
+  imports: [AppConfigModule, DatabaseModule, RedisModule, HealthModule, AuthModule, UsersModule, WalletsModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

@@ -48,6 +48,12 @@ model User {
   wallet       Wallet?
   authSessions AuthSession[]
 
+  // Serves GET /users/search (Milestone 2): the query always filters
+  // status = 'ACTIVE' and sorts by (displayName, id) for cursor pagination,
+  // so a composite index covers both the filter and the seek in one scan.
+  // The unique index already on `email` covers the exact-match email path,
+  // so no separate email index is added here.
+  @@index([status, displayName, id])
   @@map("users")
 }
 

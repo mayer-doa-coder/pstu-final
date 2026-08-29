@@ -15,10 +15,12 @@ COPY apps/web/package.json apps/web/package.json
 RUN npm ci
 
 # ---- build: compile TypeScript ----
-# (No `prisma generate` yet: the schema has zero models until Milestone 1,
-# and Prisma's CLI refuses to generate a client until at least one exists.)
 FROM deps AS build
 COPY . .
+# Generate the Prisma client first so `@prisma/client` exports the model types
+# (User, Wallet, AuthSession, …) that the API/worker source imports; without
+# this the `nest build` TypeScript compile fails to resolve those types.
+RUN npm run db:generate
 RUN npm run build --workspace apps/api
 
 # ---- runtime: only what's needed to run the compiled API/worker ----
