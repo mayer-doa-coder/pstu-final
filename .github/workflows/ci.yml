@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: money_movement
+          POSTGRES_PASSWORD: money_movement
+          POSTGRES_DB: money_movement
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U money_movement"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://money_movement:money_movement@localhost:5432/money_movement?schema=public
+      REDIS_URL: redis://localhost:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Validate migrations against a fresh database
+        run: npm run db:migrate:deploy
+
+      - name: Unit + API tests
+        run: npm test
+
+      - name: Integration tests (Testcontainers)
+        run: npm run test:integration --workspace apps/api

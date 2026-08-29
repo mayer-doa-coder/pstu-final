@@ -1,0 +1,34 @@
+{
+  "name": "money-movement",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Closed-loop simulated BDT money movement platform — modular monolith monorepo.",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "db:generate": "prisma generate --schema database/prisma/schema.prisma",
+    "db:migrate:dev": "prisma migrate dev --schema database/prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema database/prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.1",
+    "eslint": "^9.9.1",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.9.0",
+    "prettier": "^3.3.3",
+    "prisma": "^5.19.1",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.3.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

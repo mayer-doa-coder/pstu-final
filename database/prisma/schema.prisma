@@ -1,0 +1,85 @@
+// Money Movement — Prisma schema.
+//
+// Milestone 1 (Auth + User + Wallet foundation). Only the models needed for
+// authentication, user identity, and wallets are defined here — transfers,
+// ledger, money requests, idempotency, outbox, notifications, and audit
+// arrive in later milestones per IMPLEMENTATION_GUIDE.md §4.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [citext]
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum WalletStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+model User {
+  // Native UUID column per IMPLEMENTATION_GUIDE.md §2.2. Generated as
+  // UUIDv4 (Prisma's built-in default) rather than the guide's UUIDv7
+  // preference — acceptable for this milestone since the column type is
+  // unaffected; app-level UUIDv7 generation can be introduced later
+  // without a schema change if the sequential-index benefit is needed.
+  id           String     @id @default(uuid()) @db.Uuid
+  // CITEXT gives case-insensitive uniqueness at the database level — the
+  // real enforcement point for "normalized unique email" (PRD.md §3.1),
+  // not just application-side lowercasing.
+  email        String     @unique @db.Citext
+  displayName  String     @map("display_name")
+  passwordHash String     @map("password_hash")
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  wallet       Wallet?
+  authSessions AuthSession[]
+
+  @@map("users")
+}
+
+model Wallet {
+  id           String       @id @default(uuid()) @db.Uuid
+  userId       String       @unique @map("user_id") @db.Uuid
+  currency     String       @default("BDT") @db.Char(3)
+  // Integer minor units (poisha) only — see PRD.md §3.2. Never floating point.
+  balanceMinor BigInt       @map("balance_minor")
+  status       WalletStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("wallets")
+}
+
+model AuthSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  // Only the hash is ever persisted — the raw refresh token exists solely
+  // in the HttpOnly cookie on the client. A unique index lets /auth/refresh
+  // resolve "which session" directly from the presented token alone.
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  userAgent        String?   @map("user_agent")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("auth_sessions")
+}
